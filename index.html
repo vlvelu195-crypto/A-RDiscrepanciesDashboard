@@ -735,9 +735,69 @@ const COLORS = ['#4f8ef7','#7c5cfc','#34c784','#f5a623','#f05252','#00c9b1','#e8
 
 function monthRank(m) { const i = MONTH_ORDER.indexOf(m); return i === -1 ? 999 : i; }
 
-function loadDashboard() {
-  allData = SEED_DATA;
-  document.getElementById('lastUpdated').textContent = 'Loaded: ' + new Date().toLocaleDateString();
+// ══════════════════════════════════════
+//  JSONBIN CLOUD STORAGE
+// ══════════════════════════════════════
+const JSONBIN_KEY = '$2a$10$1DphAj4BP0jsWGgjrIYuZ.MhxpnyKLBqGbjRH06O3zbtvJh6HybqW';
+const JSONBIN_BIN_ID_KEY = 'ar_jsonbin_bin_id';
+
+async function saveToCloud(data) {
+  try {
+    let binId = localStorage.getItem(JSONBIN_BIN_ID_KEY);
+    const payload = { records: data, uploadedAt: new Date().toISOString(), uploadedBy: currentUser?.displayName || 'Admin' };
+    let url, method;
+    if (binId) {
+      url = `https://api.jsonbin.io/v3/b/${binId}`;
+      method = 'PUT';
+    } else {
+      url = 'https://api.jsonbin.io/v3/b';
+      method = 'POST';
+    }
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json', 'X-Master-Key': JSONBIN_KEY, 'X-Bin-Name': 'AR-Dashboard-Data' },
+      body: JSON.stringify(payload)
+    });
+    const json = await res.json();
+    if (!binId && json.metadata?.id) {
+      localStorage.setItem(JSONBIN_BIN_ID_KEY, json.metadata.id);
+    }
+    return true;
+  } catch(e) {
+    console.error('Cloud save failed:', e);
+    return false;
+  }
+}
+
+async function loadFromCloud() {
+  try {
+    const binId = localStorage.getItem(JSONBIN_BIN_ID_KEY);
+    if (!binId) return null;
+    const res = await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`, {
+      headers: { 'X-Master-Key': JSONBIN_KEY }
+    });
+    const json = await res.json();
+    if (json.record?.records) return json.record;
+    return null;
+  } catch(e) {
+    return null;
+  }
+}
+
+async function loadDashboard() {
+  const lastUpdatedEl = document.getElementById('lastUpdated');
+  lastUpdatedEl.textContent = 'Loading data...';
+  const cloud = await loadFromCloud();
+  if (cloud && cloud.records && cloud.records.length > 0) {
+    allData = cloud.records;
+    const uploadDate = cloud.uploadedAt ? new Date(cloud.uploadedAt).toLocaleString() : '';
+    const uploadedBy = cloud.uploadedBy || '';
+    lastUpdatedEl.textContent = `Last updated: ${uploadDate}${uploadedBy ? ' by ' + uploadedBy : ''}`;
+    showToast('✓ Data loaded from cloud (' + allData.length + ' records)');
+  } else {
+    allData = SEED_DATA;
+    lastUpdatedEl.textContent = 'Showing demo data — upload a file to share live data';
+  }
   applyScopeAndFilter();
 }
 
@@ -788,10 +848,20 @@ document.getElementById('fileInput').addEventListener('change', function(e) {
         return out;
       });
       allData = rows;
-      document.getElementById('lastUpdated').textContent = 'Updated: ' + new Date().toLocaleString();
-      showToast('✓ ' + rows.length + ' records loaded');
+      document.getElementById('lastUpdated').textContent = 'Saving to cloud...';
+      showToast('✓ ' + rows.length + ' records loaded — saving to cloud...');
       this.value = '';
       applyScopeAndFilter();
+      saveToCloud(rows).then(success => {
+        const ts = new Date().toLocaleString();
+        if (success) {
+          document.getElementById('lastUpdated').textContent = `Last updated: ${ts} by ${currentUser?.displayName || 'Admin'}`;
+          showToast('✓ Data saved to cloud — all users will now see this data');
+        } else {
+          document.getElementById('lastUpdated').textContent = `Updated locally: ${ts} (cloud save failed)`;
+          showToast('⚠ Saved locally only — check your connection', true);
+        }
+      });
     } catch(err) { alert('Error reading file: ' + err.message); }
   }.bind(this);
   reader.readAsBinaryString(file);
