@@ -839,19 +839,11 @@ async function loadDashboard() {
     const uploadedBy = cloud.uploadedBy || '';
     lastUpdatedEl.textContent = `Last updated: ${uploadDate}${uploadedBy ? ' by ' + uploadedBy : ''}`;
     applyScopeAndFilter();
-  } else if (!allData || allData.length === 0) {
+  } else {
+    // Cloud returned empty or failed — always fall back to SEED_DATA
     allData = SEED_DATA;
     lastUpdatedEl.textContent = 'Showing demo data — upload a file to share live data';
     applyScopeAndFilter();
-  } else {
-    // Keep cached data, remove loading indicator
-    const cached = localStorage.getItem('ar_data_cache');
-    if (cached) {
-      const parsed = JSON.parse(cached);
-      const uploadDate = parsed.uploadedAt ? new Date(parsed.uploadedAt).toLocaleString() : '';
-      const uploadedBy = parsed.uploadedBy || '';
-      lastUpdatedEl.textContent = `Last updated: ${uploadDate}${uploadedBy ? ' by ' + uploadedBy : ''}`;
-    }
   }
 }
 
