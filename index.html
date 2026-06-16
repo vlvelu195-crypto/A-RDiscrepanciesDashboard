@@ -543,6 +543,24 @@ let USERS = loadUsers();
 // ══════════════════════════════════════
 let currentUser = null;
 
+// ── AUTO-RESTORE SESSION ON REFRESH ──
+(function restoreSession() {
+  const savedUsername = localStorage.getItem('ar_session');
+  if (!savedUsername) return;
+  const match = USERS.find(u => u.username === savedUsername);
+  if (match) {
+    currentUser = match;
+    // Wait for DOM to be ready
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', onLoginSuccess);
+    } else {
+      onLoginSuccess();
+    }
+  } else {
+    localStorage.removeItem('ar_session');
+  }
+})();
+
 function doLogin() {
   const u = document.getElementById('loginUser').value.trim();
   const p = document.getElementById('loginPass').value;
@@ -553,6 +571,7 @@ function doLogin() {
   }
   document.getElementById('loginError').classList.remove('show');
   currentUser = match;
+  localStorage.setItem('ar_session', match.username);
   onLoginSuccess();
 }
 document.getElementById('loginPass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
@@ -560,6 +579,7 @@ document.getElementById('loginUser').addEventListener('keydown', e => { if (e.ke
 
 function doLogout() {
   currentUser = null;
+  localStorage.removeItem('ar_session');
   document.getElementById('loginUser').value = '';
   document.getElementById('loginPass').value = '';
   showPage('login');
