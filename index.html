@@ -759,12 +759,39 @@ function monthRank(m) { const i = MONTH_ORDER.indexOf(m); return i === -1 ? 999 
 //  JSONBIN CLOUD STORAGE
 // ══════════════════════════════════════
 const JSONBIN_KEY = '$2a$10$1DphAj4BP0jsWGgjrIYuZ.MhxpnyKLBqGbjRH06O3zbtvJh6HybqW';
-const JSONBIN_BIN_ID_KEY = 'ar_jsonbin_bin_id';
+const JSONBIN_BIN_NAME = 'AR-Dashboard-Data';
+let _resolvedBinId = null; // cached in memory once found
+
+async function getBinId() {
+  // Return memory-cached bin ID if already found this session
+  if (_resolvedBinId) return _resolvedBinId;
+  // Try localStorage (set by admin after first upload)
+  const stored = localStorage.getItem('ar_jsonbin_bin_id');
+  if (stored) { _resolvedBinId = stored; return stored; }
+  // Look it up from JSONBin by listing all bins
+  try {
+    const res = await fetch('https://api.jsonbin.io/v3/b?sortBy=createdAt&sortOrder=desc', {
+      headers: { 'X-Master-Key': JSONBIN_KEY }
+    });
+    const json = await res.json();
+    const bins = Array.isArray(json) ? json : (json.result || []);
+    const match = bins.find(b => b.record?.name === JSONBIN_BIN_NAME || b.metadata?.name === JSONBIN_BIN_NAME);
+    if (match) {
+      const id = match.record?.id || match.metadata?.id || match._id;
+      if (id) {
+        _resolvedBinId = id;
+        localStorage.setItem('ar_jsonbin_bin_id', id); // cache for next time
+        return id;
+      }
+    }
+  } catch(e) {}
+  return null;
+}
 
 async function saveToCloud(data) {
   try {
-    let binId = localStorage.getItem(JSONBIN_BIN_ID_KEY);
     const payload = { records: data, uploadedAt: new Date().toISOString(), uploadedBy: currentUser?.displayName || 'Admin' };
+    let binId = await getBinId();
     let url, method;
     if (binId) {
       url = `https://api.jsonbin.io/v3/b/${binId}`;
@@ -775,12 +802,14 @@ async function saveToCloud(data) {
     }
     const res = await fetch(url, {
       method,
-      headers: { 'Content-Type': 'application/json', 'X-Master-Key': JSONBIN_KEY, 'X-Bin-Name': 'AR-Dashboard-Data' },
+      headers: { 'Content-Type': 'application/json', 'X-Master-Key': JSONBIN_KEY, 'X-Bin-Name': JSONBIN_BIN_NAME },
       body: JSON.stringify(payload)
     });
     const json = await res.json();
-    if (!binId && json.metadata?.id) {
-      localStorage.setItem(JSONBIN_BIN_ID_KEY, json.metadata.id);
+    const newId = json.metadata?.id;
+    if (newId) {
+      _resolvedBinId = newId;
+      localStorage.setItem('ar_jsonbin_bin_id', newId);
     }
     return true;
   } catch(e) {
@@ -791,7 +820,7 @@ async function saveToCloud(data) {
 
 async function loadFromCloud() {
   try {
-    const binId = localStorage.getItem(JSONBIN_BIN_ID_KEY);
+    const binId = await getBinId();
     if (!binId) return null;
     const res = await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`, {
       headers: { 'X-Master-Key': JSONBIN_KEY }
