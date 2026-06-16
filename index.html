@@ -806,19 +806,48 @@ async function loadFromCloud() {
 
 async function loadDashboard() {
   const lastUpdatedEl = document.getElementById('lastUpdated');
-  lastUpdatedEl.textContent = 'Loading data...';
+
+  // Step 1: Load from localStorage cache instantly (no delay)
+  try {
+    const cached = localStorage.getItem('ar_data_cache');
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (parsed.records && parsed.records.length > 0) {
+        allData = parsed.records;
+        const uploadDate = parsed.uploadedAt ? new Date(parsed.uploadedAt).toLocaleString() : '';
+        const uploadedBy = parsed.uploadedBy || '';
+        lastUpdatedEl.textContent = `Last updated: ${uploadDate}${uploadedBy ? ' by ' + uploadedBy : ''} (cached)`;
+        applyScopeAndFilter();
+      }
+    }
+  } catch(e) {}
+
+  // Step 2: Try to fetch fresher data from cloud in background
+  lastUpdatedEl.textContent += ' — checking cloud...';
   const cloud = await loadFromCloud();
   if (cloud && cloud.records && cloud.records.length > 0) {
     allData = cloud.records;
+    // Update localStorage cache with fresh cloud data
+    try { localStorage.setItem('ar_data_cache', JSON.stringify(cloud)); } catch(e) {}
     const uploadDate = cloud.uploadedAt ? new Date(cloud.uploadedAt).toLocaleString() : '';
     const uploadedBy = cloud.uploadedBy || '';
     lastUpdatedEl.textContent = `Last updated: ${uploadDate}${uploadedBy ? ' by ' + uploadedBy : ''}`;
-    showToast('✓ Data loaded from cloud (' + allData.length + ' records)');
-  } else {
+    applyScopeAndFilter();
+  } else if (!allData || allData === SEED_DATA) {
+    // No cache, no cloud — fall back to seed data
     allData = SEED_DATA;
     lastUpdatedEl.textContent = 'Showing demo data — upload a file to share live data';
+    applyScopeAndFilter();
+  } else {
+    // Keep cache data, just remove the "checking cloud" message
+    const cached = localStorage.getItem('ar_data_cache');
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      const uploadDate = parsed.uploadedAt ? new Date(parsed.uploadedAt).toLocaleString() : '';
+      const uploadedBy = parsed.uploadedBy || '';
+      lastUpdatedEl.textContent = `Last updated: ${uploadDate}${uploadedBy ? ' by ' + uploadedBy : ''} (offline)`;
+    }
   }
-  applyScopeAndFilter();
 }
 
 function scopeData() {
@@ -872,6 +901,11 @@ document.getElementById('fileInput').addEventListener('change', function(e) {
       showToast('✓ ' + rows.length + ' records loaded — saving to cloud...');
       this.value = '';
       applyScopeAndFilter();
+      // Save to localStorage immediately as backup
+      try {
+        localStorage.setItem('ar_data_cache', JSON.stringify({ records: rows, uploadedAt: new Date().toISOString(), uploadedBy: currentUser?.displayName || 'Admin' }));
+      } catch(e) { /* storage full */ }
+
       saveToCloud(rows).then(success => {
         const ts = new Date().toLocaleString();
         if (success) {
