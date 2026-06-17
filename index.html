@@ -664,15 +664,15 @@ function buildScopeCheckboxes(roleId, sectionId, labelId, cbId, selectedVals=[])
   label.textContent = role === 'client' ? 'Select Clients (user sees only these)' : 'Select Partners (user sees only these)';
   cb.innerHTML = items.map(v => {
     const sel = selectedVals.includes(v);
-    return `<label class="scope-check${sel?' selected':''}" onclick="toggleCheck(this)">
-      <input type="checkbox" value="${v}"${sel?' checked':''}> ${v}
+    return `<label class="scope-check${sel?' selected':''}">
+      <input type="checkbox" value="${v}"${sel?' checked':''} onchange="toggleCheck(this)"> ${v}
     </label>`;
   }).join('');
 }
 
-function toggleCheck(el) {
-  el.classList.toggle('selected');
-  el.querySelector('input').checked = el.classList.contains('selected');
+function toggleCheck(checkbox) {
+  const label = checkbox.closest('label');
+  label.classList.toggle('selected', checkbox.checked);
 }
 
 function getCheckedScope(cbId) {
