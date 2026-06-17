@@ -369,6 +369,10 @@
         Refresh File
       </label>
       <input type="file" id="fileInput" accept=".xlsx,.xls" />
+      <button class="upload-btn" id="downloadJsonBtn" onclick="downloadDataJson()" style="display:none">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Download data.json
+      </button>
       <button class="upload-btn" id="adminPanelBtn" onclick="showPage('admin')" style="display:none">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
         Manage Users
@@ -518,8 +522,16 @@
 // ══════════════════════════════════════
 //  USER STORE  (persisted to localStorage)
 // ══════════════════════════════════════
-const ALL_CLIENTS  = ['Ahern','Altitude','Axiscades','Brightmark','Flora FG','Gilbert May','VNHS'];
-const ALL_PARTNERS = ['Higginbotham','Hilb Group','Johnson & Dugan','M3 Insurance','The Benefits Company','TrueNorth'];
+let ALL_CLIENTS  = ['Ahern','Altitude','Axiscades','Brightmark','Flora FG','Gilbert May','VNHS'];
+let ALL_PARTNERS = ['Higginbotham','Hilb Group','Johnson & Dugan','M3 Insurance','The Benefits Company','TrueNorth'];
+
+function refreshScopeLists() {
+  if (!allData || allData.length === 0) return;
+  const clients  = [...new Set(allData.map(r => r['Client']).filter(Boolean))].sort();
+  const partners = [...new Set(allData.map(r => r['Partner']).filter(Boolean))].sort();
+  if (clients.length  > 0) ALL_CLIENTS  = clients;
+  if (partners.length > 0) ALL_PARTNERS = partners;
+}
 
 function loadUsers() {
   try {
@@ -597,6 +609,7 @@ function onLoginSuccess() {
   const isAdmin = currentUser.role === 'admin';
   document.getElementById('adminPanelBtn').style.display = isAdmin ? 'flex' : 'none';
   document.getElementById('uploadBtnWrap').style.display = isAdmin ? 'flex' : 'none';
+  document.getElementById('downloadJsonBtn').style.display = isAdmin ? 'flex' : 'none';
 
   // Scope banner
   if (!isAdmin) {
@@ -633,6 +646,7 @@ function switchAdminTab(tab, el) {
   el.classList.add('active');
   document.querySelectorAll('.admin-section').forEach(s => s.classList.remove('active'));
   document.getElementById('tab-' + tab).classList.add('active');
+  refreshScopeLists();
   if (tab === 'add') buildScopeCheckboxes('newRole', 'scopeSection', 'scopeLabel', 'scopeCheckboxes');
 }
 
@@ -761,6 +775,22 @@ function monthRank(m) { const i = MONTH_ORDER.indexOf(m); return i === -1 ? 999 
 // data.json is manually uploaded to GitHub by admin.
 // Everyone reads from the same public raw URL automatically.
 const GH_RAW_URL = 'https://raw.githubusercontent.com/vlvelu195-crypto/A-RDiscrepanciesDashboard/main/data.json';
+
+function downloadDataJson() {
+  const cached = localStorage.getItem('ar_data_cache');
+  if (!cached) {
+    showToast('⚠ No data to download — upload an Excel file first', true);
+    return;
+  }
+  const blob = new Blob([cached], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'data.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('✓ data.json downloaded — upload it to GitHub to share with others');
+}
 
 async function saveToCloud(data) {
   // Manual upload workflow — data.json is updated directly on GitHub by admin
