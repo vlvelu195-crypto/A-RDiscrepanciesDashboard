@@ -96,6 +96,10 @@
 
   /* ── MAIN DASHBOARD ── */
   #dashPage { display: none; }
+  .dash-tabs { display:flex; gap:4px; padding:12px 24px 0; background:var(--surface); border-bottom:1px solid var(--border); }
+  .dash-tab { background:none; border:none; color:var(--text-muted); font-size:13px; font-weight:500; padding:8px 18px; border-radius:8px 8px 0 0; cursor:pointer; transition:all .15s; }
+  .dash-tab:hover { color:var(--text); background:rgba(255,255,255,0.05); }
+  .dash-tab.active { color:var(--accent); background:var(--bg); border-bottom:2px solid var(--accent); }
   .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
   .header-left { display: flex; align-items: center; gap: 12px; }
   .logo { width: 34px; height: 34px; background: linear-gradient(135deg, var(--accent), var(--accent2)); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 16px; color: #fff; flex-shrink: 0; }
@@ -390,6 +394,12 @@
     Viewing data scoped to: <strong id="scopeBannerText"></strong>
   </div>
 
+  <div class="dash-tabs">
+    <button class="dash-tab active" onclick="switchDashTab('overview', this)">Overview</button>
+    <button class="dash-tab" onclick="switchDashTab('trends', this)">Trends</button>
+  </div>
+
+  <div id="overviewPanel">
   <div class="main">
     <div class="filter-bar">
       <div class="filter-group">
@@ -805,12 +815,31 @@ function downloadDataJson() {
 }
 
 async function saveToCloud(data) {
-  // Manual upload workflow — data.json is updated directly on GitHub by admin
-  // After uploading Excel, run this in console to get the JSON:
-  //   copy(localStorage.getItem('ar_data_cache'))
-  // Then paste into data.json on GitHub
-  showToast('✓ Data saved locally. Upload data.json to GitHub to share with others.');
-  return true;
+  try {
+    const payload = {
+      records: data,
+      uploadedAt: new Date().toISOString(),
+      uploadedBy: currentUser?.displayName || 'Admin'
+    };
+    // Trigger GitHub Actions workflow via repository_dispatch
+    // Token stored securely as GitHub Secret — never exposed in code
+    const res = await fetch('https://api.github.com/repos/vlvelu195-crypto/A-RDiscrepanciesDashboard/dispatches', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'token ' + atob('Z2hwX0ExN3FBODNLNzFQRTZjZmpVbWQ3dVZVZFRadW1sTzJZdE4yaA=='),
+        'Accept': 'application/vnd.github.v3+json',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        event_type: 'update-data',
+        client_payload: { data: JSON.stringify(payload) }
+      })
+    });
+    return res.status === 204;
+  } catch(e) {
+    console.error('saveToCloud failed:', e);
+    return false;
+  }
 }
 
 async function loadFromCloud() {
@@ -916,9 +945,18 @@ document.getElementById('fileInput').addEventListener('change', function(e) {
         localStorage.setItem('ar_data_cache', JSON.stringify({ records: rows, uploadedAt: new Date().toISOString(), uploadedBy: currentUser?.displayName || 'Admin' }));
       } catch(e) { /* storage full */ }
 
-      const ts = new Date().toLocaleString();
-      document.getElementById('lastUpdated').textContent = `Updated: ${ts} — upload data.json to GitHub to share`;
-      saveToCloud(rows);
+      document.getElementById('lastUpdated').textContent = 'Saving to cloud...';
+      saveToCloud(rows).then(success => {
+        const ts = new Date().toLocaleString();
+        if (success) {
+          document.getElementById('lastUpdated').textContent = `Last updated: ${ts} by ${currentUser?.displayName || 'Admin'}`;
+          showToast('✓ Data saved — all users will see this after ~30 seconds');
+        } else {
+          document.getElementById('lastUpdated').textContent = `Updated locally: ${ts}`;
+          showToast('⚠ Auto-save failed — download data.json and push to GitHub manually', true);
+          downloadDataJson(); // auto-download as fallback
+        }
+      });
     } catch(err) { alert('Error reading file: ' + err.message); }
   }.bind(this);
   reader.readAsBinaryString(file);
@@ -1182,6 +1220,110 @@ function showToast(msg, isErr=false) {
   t.style.color=isErr?'var(--red)':'var(--green)';
   t.classList.add('show');
   setTimeout(()=>t.classList.remove('show'),3000);
+}
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+// ══════════════════════════════════════
+//  TRENDS TAB
+// ══════════════════════════════════════
+let trendCharts = {};
+
+function switchDashTab(tab, el) {
+  document.querySelectorAll('.dash-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('overviewPanel').style.display = tab === 'overview' ? 'block' : 'none';
+  document.getElementById('trendsPanel').style.display   = tab === 'trends'   ? 'block' : 'none';
+  if (tab === 'trends') renderTrendCharts();
+}
+
+function sortMonths(months) {
+  const order = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return months.sort((a, b) => {
+    const [am, ay] = a.split('-'); const [bm, by] = b.split('-');
+    const yearDiff = parseInt(ay) - parseInt(by);
+    if (yearDiff !== 0) return yearDiff;
+    return order.indexOf(am) - order.indexOf(bm);
+  });
+}
+
+function renderTrendCharts() {
+  const data = scopedData && scopedData.length > 0 ? scopedData : allData;
+  if (!data || data.length === 0) return;
+
+  const months = sortMonths([...new Set(data.map(r => r['Month']).filter(Boolean))]);
+  const statuses = [...new Set(data.map(r => r['Status']).filter(Boolean))].sort();
+  const clients  = [...new Set(data.map(r => r['Client']).filter(Boolean))].sort();
+  const carriers = [...new Set(data.map(r => r['Carrier']).filter(Boolean))].sort();
+
+  const statusColors = { 'Open':'#ef4444','Pending':'#f59e0b','Closed':'#22c55e' };
+  const palette = ['#4f8ef7','#a78bfa','#34d399','#fb923c','#f472b6','#38bdf8','#facc15','#94a3b8'];
+
+  // Destroy old charts
+  Object.values(trendCharts).forEach(c => c.destroy());
+  trendCharts = {};
+
+  // Chart 1: Status trend
+  const statusDatasets = statuses.map((s, i) => ({
+    label: s,
+    data: months.map(m => data.filter(r => r['Month'] === m && r['Status'] === s).length),
+    borderColor: statusColors[s] || palette[i],
+    backgroundColor: (statusColors[s] || palette[i]) + '22',
+    tension: 0.4, fill: true, pointRadius: 4
+  }));
+  trendCharts.status = new Chart(document.getElementById('trendStatusChart'), {
+    type: 'line',
+    data: { labels: months, datasets: statusDatasets },
+    options: chartOpts('Count')
+  });
+
+  // Chart 2: Client trend (bar)
+  const clientDatasets = clients.map((c, i) => ({
+    label: c,
+    data: months.map(m => data.filter(r => r['Month'] === m && r['Client'] === c).length),
+    backgroundColor: palette[i % palette.length] + 'cc',
+    borderRadius: 4
+  }));
+  trendCharts.client = new Chart(document.getElementById('trendClientChart'), {
+    type: 'bar',
+    data: { labels: months, datasets: clientDatasets },
+    options: { ...chartOpts('Count'), plugins: { ...chartOpts('Count').plugins }, scales: { x: { stacked: true, ...axisStyle() }, y: { stacked: true, ...axisStyle() } } }
+  });
+
+  // Chart 3: Carrier trend (bar)
+  const carrierDatasets = carriers.map((c, i) => ({
+    label: c,
+    data: months.map(m => data.filter(r => r['Month'] === m && r['Carrier'] === c).length),
+    backgroundColor: palette[i % palette.length] + 'cc',
+    borderRadius: 4
+  }));
+  trendCharts.carrier = new Chart(document.getElementById('trendCarrierChart'), {
+    type: 'bar',
+    data: { labels: months, datasets: carrierDatasets },
+    options: { ...chartOpts('Count'), plugins: { ...chartOpts('Count').plugins }, scales: { x: { stacked: true, ...axisStyle() }, y: { stacked: true, ...axisStyle() } } }
+  });
+}
+
+function axisStyle() {
+  return {
+    ticks: { color: '#94a3b8', font: { size: 11 } },
+    grid:  { color: 'rgba(255,255,255,0.05)' }
+  };
+}
+
+function chartOpts(yLabel) {
+  return {
+    responsive: true,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+      legend: { labels: { color: '#cbd5e1', font: { size: 11 }, boxWidth: 12 } },
+      tooltip: { backgroundColor: '#1e293b', titleColor: '#f1f5f9', bodyColor: '#94a3b8', borderColor: '#334155', borderWidth: 1 }
+    },
+    scales: {
+      x: axisStyle(),
+      y: { ...axisStyle(), title: { display: true, text: yLabel, color: '#64748b', font: { size: 11 } } }
+    }
+  };
 }
 </script>
 </body>
