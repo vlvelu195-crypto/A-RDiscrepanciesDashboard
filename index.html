@@ -815,31 +815,9 @@ function downloadDataJson() {
 }
 
 async function saveToCloud(data) {
-  try {
-    const payload = {
-      records: data,
-      uploadedAt: new Date().toISOString(),
-      uploadedBy: currentUser?.displayName || 'Admin'
-    };
-    // Trigger GitHub Actions workflow via repository_dispatch
-    // Token stored securely as GitHub Secret — never exposed in code
-    const res = await fetch('https://api.github.com/repos/vlvelu195-crypto/A-RDiscrepanciesDashboard/dispatches', {
-      method: 'POST',
-      headers: {
-        'Authorization': 'token ' + atob('Z2hwX0ExN3FBODNLNzFQRTZjZmpVbWQ3dVZVZFRadW1sTzJZdE4yaA=='),
-        'Accept': 'application/vnd.github.v3+json',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        event_type: 'update-data',
-        client_payload: { data: JSON.stringify(payload) }
-      })
-    });
-    return res.status === 204;
-  } catch(e) {
-    console.error('saveToCloud failed:', e);
-    return false;
-  }
+  // Data is saved to localStorage only.
+  // Admin downloads data.json and uploads to GitHub manually.
+  return true;
 }
 
 async function loadFromCloud() {
@@ -945,18 +923,10 @@ document.getElementById('fileInput').addEventListener('change', function(e) {
         localStorage.setItem('ar_data_cache', JSON.stringify({ records: rows, uploadedAt: new Date().toISOString(), uploadedBy: currentUser?.displayName || 'Admin' }));
       } catch(e) { /* storage full */ }
 
-      document.getElementById('lastUpdated').textContent = 'Saving to cloud...';
-      saveToCloud(rows).then(success => {
-        const ts = new Date().toLocaleString();
-        if (success) {
-          document.getElementById('lastUpdated').textContent = `Last updated: ${ts} by ${currentUser?.displayName || 'Admin'}`;
-          showToast('✓ Data saved — all users will see this after ~30 seconds');
-        } else {
-          document.getElementById('lastUpdated').textContent = `Updated locally: ${ts}`;
-          showToast('⚠ Auto-save failed — download data.json and push to GitHub manually', true);
-          downloadDataJson(); // auto-download as fallback
-        }
-      });
+      const ts = new Date().toLocaleString();
+      document.getElementById('lastUpdated').textContent = `Updated: ${ts} — click Download data.json to share`;
+      showToast('✓ Data loaded — click Download data.json then upload to GitHub');
+      saveToCloud(rows);
     } catch(err) { alert('Error reading file: ' + err.message); }
   }.bind(this);
   reader.readAsBinaryString(file);
