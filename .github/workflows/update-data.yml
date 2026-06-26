@@ -1,0 +1,26 @@
+name: Update Dashboard Data
+
+on:
+  repository_dispatch:
+    types: [update-data]
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Write data.json
+        run: |
+          echo '${{ github.event.client_payload.data }}' > data.json
+
+      - name: Commit and push
+        run: |
+          git config user.name "Dashboard Bot"
+          git config user.email "bot@dashboard"
+          git add data.json
+          git diff --cached --quiet || git commit -m "Update dashboard data [skip ci]"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
