@@ -261,6 +261,14 @@
   .combo-new { margin-top: 6px; }
   .combo-hint { font-size: 11px; color: var(--muted); min-height: 14px; }
 
+  .gh-pill { display: inline-flex; align-items: center; gap: 2px; background: var(--card); border: 1px solid var(--border); color: var(--text); border-radius: 20px; padding: 4px 12px; font-size: 12px; font-family: var(--font); cursor: pointer; white-space: nowrap; }
+  .gh-pill:hover { border-color: var(--accent); }
+  .connect-nudge { display: none; background: rgba(var(--yellow-rgb),.12); border: 1px solid rgba(var(--yellow-rgb),.4); border-radius: 10px; padding: 10px 14px; font-size: 13px; margin-bottom: 12px; }
+  .gh-setup { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; margin-bottom: 14px; font-size: 13px; line-height: 1.6; }
+  .gh-setup summary { cursor: pointer; font-weight: 600; color: var(--link); }
+  .gh-setup ol { margin: 10px 0 8px 20px; }
+  .gh-setup p { color: var(--muted); font-size: 12.5px; }
+
   /* ── BRAND ── */
   .wfj-badge { display: inline-flex; align-items: center; gap: 8px; background: #fff; border-radius: 10px; padding: 6px 11px; box-shadow: 0 1px 3px rgba(0,0,0,.3); flex-shrink: 0; }
   .wfj-mark { height: 28px; width: auto; display: block; }
@@ -515,7 +523,10 @@
   </div>
   <div class="action-bar">
 
-      <div class="last-updated" id="lastUpdated">Loaded: —</div>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;min-width:0">
+        <div class="last-updated" id="lastUpdated">Loaded: —</div>
+        <button class="gh-pill admin-only" id="ghPill" onclick="openClosuresPanel()" title="Where your changes are saved"></button>
+      </div>
       <div class="action-buttons">
       <label class="upload-btn" for="fileInput" id="uploadBtnWrap">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
@@ -525,6 +536,10 @@
       <button class="upload-btn" id="downloadJsonBtn" onclick="downloadDataJson()" style="display:none">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
         Download data.json
+      </button>
+      <button class="upload-btn admin-only" id="dlSourceBtn" onclick="downloadSourceData()" title="Masterfile Excel with every manual change applied">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="14 3 14 9 20 9"/><line x1="12" y1="12" x2="12" y2="18"/><polyline points="9 15 12 18 15 15"/></svg>
+        Download Source Data
       </button>
       <button class="upload-btn admin-only" onclick="openAddForm()">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -720,7 +735,7 @@
 <div class="modal-overlay" id="closeModal" role="dialog" aria-modal="true" style="z-index:120">
   <div class="modal">
     <div class="modal-title" id="closeModalTitle">Close discrepancy</div>
-    <div class="field-hint">These records will be marked Closed for everyone. The source file is not changed.</div>
+    <div class="field-hint">These records will be marked Closed and saved to data.json for everyone.</div>
     <div class="close-list" id="closeList"></div>
     <div class="field-hint">Resolution note (required)</div>
     <textarea class="note-input" id="closeNote" placeholder="e.g. Carrier issued credit on Jun-26 invoice; confirmed with Delta rep"></textarea>
@@ -737,20 +752,34 @@
     <div class="detail-head">
       <div>
         <div class="detail-title">Manual changes</div>
-        <div class="detail-sub">Discrepancies added or closed from the dashboard, kept separate from the source file.</div>
+        <div class="detail-sub">Discrepancies added or closed from the dashboard. They are written into data.json on GitHub.</div>
       </div>
       <button class="icon-close" onclick="closeClosuresPanel()" aria-label="Close">×</button>
     </div>
     <div style="padding:16px 22px;overflow:auto;flex:1;">
+      <div class="connect-nudge" id="connectNudge">Your change is saved in this browser. To write it to <strong>data.json</strong> on GitHub so everyone sees it, connect GitHub once below.</div>
       <div class="sync-box" id="syncStatus"></div>
+      <details class="gh-setup" id="ghSetup">
+        <summary>How to get a GitHub token (one-time, about 2 minutes)</summary>
+        <ol>
+          <li>Sign in to GitHub as <strong>vlvelu195-crypto</strong> (the account that owns the repository).</li>
+          <li>Open <strong>Settings → Developer settings → Personal access tokens → Fine-grained tokens</strong> and click <strong>Generate new token</strong>.</li>
+          <li>Name it e.g. “Discrepancy Tracker”, and pick an expiration date.</li>
+          <li>Under <strong>Repository access</strong>, choose <strong>Only select repositories</strong> → <strong>A-RDiscrepanciesDashboard</strong>.</li>
+          <li>Under <strong>Permissions → Repository permissions</strong>, set <strong>Contents</strong> to <strong>Read and write</strong>.</li>
+          <li>Click <strong>Generate token</strong>, copy it, paste it below and click <strong>Save token</strong>.</li>
+        </ol>
+        <p>If another admin works from a different GitHub account, the repo owner must first add them as a collaborator. They then use a <em>classic</em> token with the <strong>repo</strong> scope, because fine-grained tokens only cover repositories you own. Each admin connects once per browser; the token stays in that browser and is never written into the page or data.json.</p>
+      </details>
       <div class="field-group" style="margin-bottom:10px;">
         <label>GitHub access token</label>
-        <input type="password" id="ghTokenInput" placeholder="Fine-grained token with Contents: Read and write on this repo" autocomplete="off" />
+        <input type="password" id="ghTokenInput" placeholder="Paste token (starts with github_pat_ or ghp_)" autocomplete="off" />
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px;">
         <button class="btn-primary" onclick="saveToken()">Save token</button>
         <button class="btn-secondary" onclick="removeToken()">Remove token</button>
-        <button class="btn-secondary" onclick="syncNow()">Sync now</button>
+        <button class="btn-secondary" onclick="testConnection()">Test connection</button>
+        <button class="btn-secondary" onclick="syncNow()">Save now</button>
         <button class="btn-secondary" onclick="exportClosures()">Export changes to Excel</button>
       </div>
       <div class="section-title" style="font-size:14px;margin-bottom:10px">Added discrepancies</div>
@@ -1122,79 +1151,130 @@ function monthRank(m) {
 // ══════════════════════════════════════
 //  GITHUB RAW DATA LOADER
 // ══════════════════════════════════════
-// data.json is manually uploaded to GitHub by admin.
-// Everyone reads from the same public raw URL automatically.
+// data.json on GitHub is the one shared file. It holds the masterfile records with every manual
+// change (added / closed) already applied, plus a "manualChanges" ledger so the changes survive the
+// next masterfile refresh and can still be reopened or removed. Admins with a GitHub token save to it
+// directly from the dashboard; everyone else reads it.
 const GH_RAW_URL = 'https://raw.githubusercontent.com/vlvelu195-crypto/A-RDiscrepanciesDashboard/main/data.json';
+let sourceMeta = { uploadedAt: '', uploadedBy: '', fileName: '' };
+let lastChange = { at: '', by: '' };
+let dataDirty = false;   // a new masterfile was loaded here but not yet saved to GitHub
+try { dataDirty = localStorage.getItem('ar_data_dirty') === '1'; } catch(e) {}
+function setDataDirty(v) { dataDirty = v; try { localStorage.setItem('ar_data_dirty', v ? '1' : '0'); } catch(e) {} }
+
+const MANUAL_COLS = ['Manual Change','Status Before Closure','Closure Note','Closed By','Closed On','Manual Entry ID','Added By','Added On'];
+// Strip manual changes back out, giving the original masterfile records
+function unbake(records) {
+  return (records || []).filter(r => !r['Manual Entry ID']).map(r => {
+    if (!MANUAL_COLS.some(c => c in r)) return r;
+    const o = Object.assign({}, r);
+    if (o['Manual Change'] === 'Closed' && o['Status Before Closure']) o['Status'] = o['Status Before Closure'];
+    MANUAL_COLS.forEach(c => delete o[c]);
+    return o;
+  });
+}
+// Apply manual changes into the records, with readable audit columns
+function bake(base) {
+  return applyOverrides(base).map(r => {
+    const o = {};
+    for (const k in r) if (!k.startsWith('_')) o[k] = r[k];
+    if (r._added) Object.assign(o, { 'Manual Entry ID': r._added.id, 'Added By': r._added.by, 'Added On': r._added.at });
+    if (r._manual) Object.assign(o, { 'Manual Change': 'Closed', 'Status Before Closure': r._srcStatus, 'Closure Note': r._manual.note, 'Closed By': r._manual.by, 'Closed On': r._manual.at });
+    return o;
+  });
+}
+function buildDataJson() {
+  return { records: bake(sourceData), uploadedAt: sourceMeta.uploadedAt, uploadedBy: sourceMeta.uploadedBy, sourceFileName: sourceMeta.fileName || '',
+           updatedAt: lastChange.at || sourceMeta.uploadedAt, updatedBy: lastChange.by || sourceMeta.uploadedBy,
+           manualChanges: { overrides: OVERRIDES, added: ADDED } };
+}
+function cacheDataJson(json) { try { localStorage.setItem('ar_data_cache', JSON.stringify(json)); } catch(e) {} }
+function cacheCurrent() { cacheDataJson(buildDataJson()); }
+
+function applyDataJson(json) {
+  const m = json.manualChanges || {};
+  if (overridesDirty) { OVERRIDES = mergeOverrides(m.overrides || {}, OVERRIDES); ADDED = mergeOverrides(m.added || {}, ADDED); }
+  else { OVERRIDES = m.overrides || {}; ADDED = m.added || {}; }
+  sourceMeta = { uploadedAt: json.uploadedAt || '', uploadedBy: json.uploadedBy || '', fileName: json.sourceFileName || '' };
+  lastChange = { at: json.updatedAt || '', by: json.updatedBy || '' };
+  setSourceData(unbake(json.records));
+}
+
+function setLastUpdated(suffix = '') {
+  const el = document.getElementById('lastUpdated');
+  const f = d => d ? new Date(d).toLocaleString() : '';
+  let t = sourceMeta.uploadedAt ? `Masterfile: ${f(sourceMeta.uploadedAt)}${sourceMeta.uploadedBy ? ' by ' + sourceMeta.uploadedBy : ''}` : 'Masterfile date unknown';
+  if (lastChange.at && lastChange.at !== sourceMeta.uploadedAt) t += ` · Last change: ${f(lastChange.at)}${lastChange.by ? ' by ' + lastChange.by : ''}`;
+  el.textContent = t + (suffix ? ' ' + suffix : '');
+}
 
 function downloadDataJson() {
-  const cached = localStorage.getItem('ar_data_cache');
-  if (!cached) {
-    showToast('⚠ No data to download — upload an Excel file first', true);
-    return;
-  }
-  const blob = new Blob([cached], { type: 'application/json' });
+  if (!sourceData.length) { showToast('⚠ No data to download — upload an Excel file first', true); return; }
+  const blob = new Blob([JSON.stringify(buildDataJson())], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'data.json';
-  a.click();
+  const a = document.createElement('a'); a.href = url; a.download = 'data.json'; a.click();
   URL.revokeObjectURL(url);
-  showToast('✓ data.json downloaded — upload it to GitHub to share with others');
+  showToast(getToken() ? '✓ data.json downloaded (it is also saved to GitHub automatically)' : '✓ data.json downloaded — includes all manual changes');
 }
 
-async function saveToCloud(data) {
-  // Data is saved to localStorage only.
-  // Admin downloads data.json and uploads to GitHub manually.
-  return true;
-}
-
-async function loadFromCloud() {
-  try {
-    const res = await fetch(GH_RAW_URL + '?t=' + Date.now());
-    if (!res.ok) return null;
-    const json = await res.json();
-    if (json.records && json.records.length > 0) return json;
-    return null;
-  } catch(e) {
-    return null;
+async function fetchDataJson(useApi) {
+  if (useApi) {
+    const res = await fetch(ghApi(GH_DATA_PATH) + '?ref=' + GH_BRANCH + '&t=' + Date.now(), { headers: ghHeaders('application/vnd.github.raw+json'), cache: 'no-store' });
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(ghError(res.status));
+    return await res.json();
   }
+  const res = await fetch(GH_RAW_URL + '?t=' + Date.now(), { cache: 'no-store' });
+  if (!res.ok) return null;
+  return await res.json();
+}
+async function loadFromCloud() {
+  // Admins with a token read through the GitHub API (always the latest commit); others use the public raw file
+  try { return await fetchDataJson(!!getToken()); }
+  catch(e) { try { return await fetchDataJson(false); } catch(e2) { return null; } }
+}
+async function fetchLegacyOverrides() {   // changes saved by the previous version in overrides.json
+  try {
+    const r = await fetch(`https://raw.githubusercontent.com/${GH_OWNER}/${GH_REPO}/${GH_BRANCH}/overrides.json?t=${Date.now()}`, { cache: 'no-store' });
+    if (!r.ok) return null;
+    const j = await r.json(); return { overrides: j.overrides || {}, added: j.added || {} };
+  } catch(e) { return null; }
 }
 
 async function loadDashboard() {
-  const lastUpdatedEl = document.getElementById('lastUpdated');
-
-  // Step 1: Show cached data instantly while fetching from GitHub
+  // Local, not-yet-saved changes from this browser
   try {
-    const cached = localStorage.getItem('ar_data_cache');
-    if (cached) {
-      const parsed = JSON.parse(cached);
-      if (parsed.records && parsed.records.length > 0) {
-        setSourceData(parsed.records);
-        const uploadDate = parsed.uploadedAt ? new Date(parsed.uploadedAt).toLocaleString() : '';
-        const uploadedBy = parsed.uploadedBy || '';
-        lastUpdatedEl.textContent = `Last updated: ${uploadDate}${uploadedBy ? ' by ' + uploadedBy : ''} (cached)`;
-        applyScopeAndFilter();
-      }
-    }
+    const c = JSON.parse(localStorage.getItem('ar_overrides_cache') || 'null');
+    if (c) { OVERRIDES = c.overrides || {}; ADDED = c.added || {}; overridesDirty = !!c.dirty; }
   } catch(e) {}
 
-  // Step 2: Fetch fresh data + manual closures from GitHub in parallel
-  const [cloud] = await Promise.all([loadFromCloud(), loadOverrides()]);
-  if (cloud && cloud.records && cloud.records.length > 0) {
-    setSourceData(cloud.records);
-    try { localStorage.setItem('ar_data_cache', JSON.stringify(cloud)); } catch(e) {}
-    const uploadDate = cloud.uploadedAt ? new Date(cloud.uploadedAt).toLocaleString() : '';
-    const uploadedBy = cloud.uploadedBy || '';
-    lastUpdatedEl.textContent = `Last updated: ${uploadDate}${uploadedBy ? ' by ' + uploadedBy : ''}`;
-    applyScopeAndFilter();
-  } else {
-    // Cloud returned empty or failed — always fall back to SEED_DATA
+  // Step 1: show the cached copy instantly
+  try {
+    const parsed = JSON.parse(localStorage.getItem('ar_data_cache') || 'null');
+    if (parsed && parsed.records && parsed.records.length) { applyDataJson(parsed); setLastUpdated('(cached)'); applyScopeAndFilter(); }
+  } catch(e) {}
+
+  // Step 2: latest data.json from GitHub
+  const [cloud, legacy] = await Promise.all([dataDirty ? Promise.resolve(null) : loadFromCloud(), fetchLegacyOverrides()]);
+  if (cloud && cloud.records && cloud.records.length) {
+    if (legacy) {
+      cloud.manualChanges = cloud.manualChanges || {};
+      cloud.manualChanges.overrides = mergeOverrides(legacy.overrides, cloud.manualChanges.overrides || {});
+      cloud.manualChanges.added = mergeOverrides(legacy.added, cloud.manualChanges.added || {});
+    }
+    applyDataJson(cloud);
+    cacheDataJson(cloud); lastSyncAt = new Date();
+    setLastUpdated(); applyScopeAndFilter();
+  } else if (!sourceData.length) {
+    if (legacy) { OVERRIDES = mergeOverrides(legacy.overrides, OVERRIDES); ADDED = mergeOverrides(legacy.added, ADDED); }
     setSourceData(SEED_DATA);
-    lastUpdatedEl.textContent = 'Showing demo data — upload a file to share live data';
+    document.getElementById('lastUpdated').textContent = 'Showing demo data — upload a file to share live data';
     applyScopeAndFilter();
+  } else if (dataDirty) {
+    setLastUpdated('(not yet saved to GitHub)');
   }
-  updateUnsyncedBadge();
-  if (isAdminUser() && overridesDirty && getToken()) pushOverrides(true);
+  saveOverridesLocal();
+  if (isAdminUser() && (overridesDirty || dataDirty) && getToken()) pushToGitHub(true);
 }
 
 function scopeData() {
@@ -1216,7 +1296,7 @@ function applyScopeAndFilter() {
   applyFilters();
 }
 
-// FILE UPLOAD (admin only)
+// FILE UPLOAD (admin only) — loads the masterfile and saves it straight to GitHub
 document.getElementById('fileInput').addEventListener('change', function(e) {
   const file = e.target.files[0];
   if (!file) return;
@@ -1243,20 +1323,17 @@ document.getElementById('fileInput').addEventListener('change', function(e) {
         if (out['Status']) out['Status'] = out['Status'].trim();
         return out;
       });
-      setSourceData(rows);
-      document.getElementById('lastUpdated').textContent = 'Saving to cloud...';
-      showToast('✓ ' + rows.length + ' records loaded — saving to cloud...');
       this.value = '';
+      const now = new Date().toISOString(), by = currentUser?.displayName || 'Admin';
+      sourceMeta = { uploadedAt: now, uploadedBy: by, fileName: file.name };
+      setPendingSource(file.name, btoa(ev.target.result));   // keep the original workbook so downloads keep its exact format
+      lastChange = { at: now, by };
+      setSourceData(unbake(rows));
       applyScopeAndFilter();
-      // Save to localStorage immediately as backup
-      try {
-        localStorage.setItem('ar_data_cache', JSON.stringify({ records: rows, uploadedAt: new Date().toISOString(), uploadedBy: currentUser?.displayName || 'Admin' }));
-      } catch(e) { /* storage full */ }
-
-      const ts = new Date().toLocaleString();
-      document.getElementById('lastUpdated').textContent = `Updated: ${ts} — click Download data.json to share`;
-      showToast('✓ Data loaded — click Download data.json then upload to GitHub');
-      saveToCloud(rows);
+      setDataDirty(true); cacheCurrent();
+      setLastUpdated(getToken() ? '' : '(not yet saved to GitHub)');
+      showToast('✓ ' + rows.length + ' records loaded' + (getToken() ? ' — saving to GitHub…' : ''));
+      pushToGitHub(false);
     } catch(err) { alert('Error reading file: ' + err.message); }
   }.bind(this);
   reader.readAsBinaryString(file);
@@ -1523,7 +1600,8 @@ document.getElementById('clearFilters').addEventListener('click',function(){
 const GH_OWNER  = 'vlvelu195-crypto';
 const GH_REPO   = 'A-RDiscrepanciesDashboard';
 const GH_BRANCH = 'main';
-const GH_OVR_PATH = 'overrides.json';
+const GH_DATA_PATH = 'data.json';
+const GH_OVR_PATH = 'data.json';
 const KEY_FIELDS = ['Client','Carrier','Employee ID','Plan Type','Month','Comments'];
 
 let OVERRIDES = {};        // key -> { action:'close'|'reopen', status, prevStatus, note, by, at }
@@ -1551,7 +1629,8 @@ function applyOverrides(rows) {
   });
 }
 
-function saveOverridesLocal() {
+function saveOverridesLocal(changed = false) {
+  if (changed) { lastChange = { at: new Date().toISOString(), by: currentUser?.displayName || '' }; if (sourceData.length) cacheCurrent(); }
   try { localStorage.setItem('ar_overrides_cache', JSON.stringify({ overrides: OVERRIDES, added: ADDED, dirty: overridesDirty })); } catch(e) {}
   updateUnsyncedBadge();
 }
@@ -1568,83 +1647,107 @@ const b64encode = str => btoa(unescape(encodeURIComponent(str)));
 const b64decode = b64 => decodeURIComponent(escape(atob(b64.replace(/\n/g, ''))));
 const ghApi = (path) => `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${path}`;
 
-async function fetchRemoteOverrides(withSha) {
-  const token = getToken();
-  const headers = { 'Accept': 'application/vnd.github+json' };
-  if (token) headers['Authorization'] = 'Bearer ' + token;
-  try {
-    const res = await fetch(ghApi(GH_OVR_PATH) + '?ref=' + GH_BRANCH + '&t=' + Date.now(), { headers, cache: 'no-store' });
-    if (res.status === 404) return { overrides: {}, added: {}, sha: null };
-    if (!res.ok) throw new Error('GitHub API ' + res.status);
-    const j = await res.json();
-    const parsed = JSON.parse(b64decode(j.content || '') || '{}');
-    return { overrides: parsed.overrides || {}, added: parsed.added || {}, sha: j.sha };
-  } catch(e) {
-    if (withSha) throw e;
-    // Fallback for viewers (e.g. API rate-limit): read the raw file
-    try {
-      const raw = await fetch(`https://raw.githubusercontent.com/${GH_OWNER}/${GH_REPO}/${GH_BRANCH}/${GH_OVR_PATH}?t=${Date.now()}`);
-      if (!raw.ok) return null;
-      const parsed = await raw.json();
-      return { overrides: parsed.overrides || {}, added: parsed.added || {}, sha: null };
-    } catch(e2) { return null; }
-  }
+function ghHeaders(accept) {
+  const h = { 'Accept': accept || 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' };
+  const t = getToken(); if (t) h['Authorization'] = 'Bearer ' + t;
+  return h;
+}
+function ghError(status) {
+  if (status === 401) return 'GitHub rejected the token (401). It may be mistyped or expired — create a new one.';
+  if (status === 403) return 'The token can read but not write (403). Give it Contents: Read and write on ' + GH_REPO + '.';
+  if (status === 404) return 'Repository not found (404). The token must have access to ' + GH_OWNER + '/' + GH_REPO + '.';
+  if (status === 422) return 'GitHub refused the file (422).';
+  return 'GitHub error ' + status + '.';
 }
 
-async function loadOverrides() {
-  let local = {}, localAdded = {};
-  try {
-    const c = JSON.parse(localStorage.getItem('ar_overrides_cache') || 'null');
-    if (c) { local = c.overrides || {}; localAdded = c.added || {}; overridesDirty = !!c.dirty; }
-  } catch(e) {}
-  const remote = await fetchRemoteOverrides(false);
-  if (remote) {
-    OVERRIDES = overridesDirty ? mergeOverrides(remote.overrides, local) : remote.overrides;
-    ADDED = overridesDirty ? mergeOverrides(remote.added, localAdded) : remote.added;
-    lastSyncAt = new Date();
-  } else {
-    OVERRIDES = local; ADDED = localAdded;
-  }
-  saveOverridesLocal();
+// Save state shown in the action bar
+let ghState = 'idle';   // idle | saving | saved | error
+function setGhState(st) { ghState = st; renderGhPill(); renderClosuresPanel(); }
+function renderGhPill() {
+  const el = document.getElementById('ghPill'); if (!el) return;
+  const t = getToken();
+  let dot, txt;
+  if (!t) { dot = 'var(--yellow)'; txt = (overridesDirty || dataDirty) ? 'Not saved to GitHub — connect' : 'GitHub not connected'; }
+  else if (ghState === 'saving') { dot = 'var(--link)'; txt = 'Saving to GitHub…'; }
+  else if (ghState === 'error' || lastSyncError) { dot = 'var(--red)'; txt = 'GitHub save failed — details'; }
+  else if (overridesDirty || dataDirty) { dot = 'var(--yellow)'; txt = 'Unsaved changes'; }
+  else { dot = 'var(--green)'; txt = 'Saved to GitHub' + (lastSyncAt ? ' · ' + lastSyncAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''); }
+  el.innerHTML = `<span class="sync-dot" style="background:${dot}"></span>${txt}`;
 }
 
-async function pushOverrides(silent=false) {
+let pushing = false, pushQueued = false, connectPrompted = false;
+async function pushOverrides(silent = false) { return pushToGitHub(silent); }
+async function pushToGitHub(silent = false) {
   const token = getToken();
-  if (!token) { if (!silent) showToast('⚠ Saved on this browser only — add a GitHub token under Manual Changes to share', true); return false; }
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const remote = await fetchRemoteOverrides(true);
-      const merged = mergeOverrides(remote.overrides, OVERRIDES);
-      const mergedAdded = mergeOverrides(remote.added, ADDED);
-      const body = {
-        message: `Dashboard changes by ${currentUser?.displayName || 'admin'}`,
-        content: b64encode(JSON.stringify({ updatedAt: new Date().toISOString(), overrides: merged, added: mergedAdded }, null, 1)),
-        branch: GH_BRANCH
-      };
-      if (remote.sha) body.sha = remote.sha;
-      const res = await fetch(ghApi(GH_OVR_PATH), {
-        method: 'PUT',
-        headers: { 'Accept': 'application/vnd.github+json', 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
-      if (res.status === 409 || res.status === 422) continue;   // someone else saved first — refetch & retry
-      if (res.status === 401 || res.status === 403) throw new Error('Token rejected (' + res.status + '). Check it has Contents: Read and write on ' + GH_REPO + '.');
-      if (!res.ok) throw new Error('GitHub API ' + res.status);
-      OVERRIDES = merged; ADDED = mergedAdded; overridesDirty = false; lastSyncAt = new Date(); lastSyncError = '';
-      saveOverridesLocal(); refreshAfterOverride();
-      if (!silent) showToast('✓ Synced — visible to all users within a minute');
-      renderClosuresPanel();
-      return true;
-    } catch(e) {
-      lastSyncError = e.message;
-      if (!silent) showToast('⚠ Sync failed: ' + e.message, true);
-      renderClosuresPanel();
-      return false;
+  if (!token) {
+    renderGhPill();
+    if (!silent) {
+      if (!connectPrompted) { connectPrompted = true; openClosuresPanel(true); }
+      else showToast('⚠ Saved on this browser only — connect GitHub under Manual Changes', true);
     }
+    return false;
   }
-  lastSyncError = 'Conflict while saving — try Sync now';
-  if (!silent) showToast('⚠ ' + lastSyncError, true);
-  return false;
+  if (pushing) { pushQueued = true; return false; }   // one save at a time; the queued one picks up all changes
+  pushing = true; lastSyncError = ''; setGhState('saving');
+  let ok = false;
+  try {
+    if (pendingSource) await putSourceFile();
+    const url = ghApi(GH_DATA_PATH);
+    for (let attempt = 0; attempt < 3 && !ok; attempt++) {
+      // 1) current file on GitHub: its sha, plus any changes other admins saved meanwhile
+      const meta = await fetch(url + '?ref=' + GH_BRANCH + '&t=' + Date.now(), { headers: ghHeaders('application/vnd.github.object+json'), cache: 'no-store' });
+      let sha = null, remote = null;
+      if (meta.status === 200) {
+        sha = (await meta.json()).sha;
+        const r = await fetch(url + '?ref=' + GH_BRANCH + '&t=' + Date.now(), { headers: ghHeaders('application/vnd.github.raw+json'), cache: 'no-store' });
+        if (r.ok) { try { remote = await r.json(); } catch(e) { remote = null; } }
+      } else if (meta.status !== 404) throw new Error(ghError(meta.status));
+
+      if (remote) {
+        const rm = remote.manualChanges || {};
+        OVERRIDES = mergeOverrides(rm.overrides || {}, OVERRIDES);
+        ADDED = mergeOverrides(rm.added || {}, ADDED);
+        // someone uploaded a newer masterfile and we didn't: build on theirs
+        if (!dataDirty && remote.records && remote.uploadedAt && new Date(remote.uploadedAt) > new Date(sourceMeta.uploadedAt || 0)) {
+          sourceMeta = { uploadedAt: remote.uploadedAt, uploadedBy: remote.uploadedBy || '', fileName: remote.sourceFileName || '' };
+          sourceData = unbake(remote.records);
+        }
+      }
+
+      // 2) write data.json with every change applied
+      const json = buildDataJson();
+      const who = currentUser?.displayName || 'admin';
+      const body = { message: dataDirty ? `Masterfile refresh by ${who}` : `Dashboard changes by ${who}`, content: b64encode(JSON.stringify(json)), branch: GH_BRANCH };
+      if (sha) body.sha = sha;
+      const put = await fetch(url, { method: 'PUT', headers: Object.assign(ghHeaders('application/vnd.github+json'), { 'Content-Type': 'application/json' }), body: JSON.stringify(body) });
+      if (put.status === 409 || (put.status === 422 && attempt < 2)) continue;   // file changed underneath us: refetch and retry
+      if (!put.ok) throw new Error(ghError(put.status));
+
+      overridesDirty = false; setDataDirty(false);
+      cacheDataJson(json); lastSyncAt = new Date(); ok = true;
+    }
+    if (!ok) throw new Error('Someone else saved at the same moment. Click Save now to try again.');
+    saveOverridesLocal(); refreshAfterOverride(); setLastUpdated();
+    if (!silent) showToast('✓ Saved to data.json on GitHub — everyone sees it within a few minutes');
+  } catch(e) {
+    lastSyncError = e.message;
+    if (!silent) showToast('⚠ GitHub save failed: ' + e.message, true);
+  } finally {
+    pushing = false;
+    setGhState(ok ? 'saved' : 'error');
+    if (pushQueued) { pushQueued = false; pushToGitHub(true); }
+  }
+  return ok;
+}
+
+async function testConnection() {
+  if (!getToken()) { showToast('⚠ Save a token first', true); return; }
+  try {
+    const r = await fetch(ghApi(GH_DATA_PATH) + '?ref=' + GH_BRANCH + '&t=' + Date.now(), { headers: ghHeaders('application/vnd.github.object+json'), cache: 'no-store' });
+    if (r.status === 200 || r.status === 404) { lastSyncError = ''; showToast('✓ Token can see ' + GH_REPO + '. Write access is confirmed on the first save.'); }
+    else { lastSyncError = ghError(r.status); showToast('⚠ ' + lastSyncError, true); }
+  } catch(e) { lastSyncError = 'Could not reach GitHub: ' + e.message; showToast('⚠ ' + lastSyncError, true); }
+  renderGhPill(); renderClosuresPanel();
 }
 
 function refreshAfterOverride() {
@@ -1657,10 +1760,11 @@ function refreshAfterOverride() {
 }
 
 function updateUnsyncedBadge() {
+  renderGhPill();
   const b = document.getElementById('unsyncedBadge'); if (!b) return;
-  b.style.display = overridesDirty ? 'inline-block' : 'none';
+  b.style.display = (overridesDirty || dataDirty) ? 'inline-block' : 'none';
   b.textContent = '!';
-  b.title = 'Closures not yet synced to GitHub';
+  b.title = 'Changes not yet saved to GitHub';
 }
 
 function manualTag(r) {
@@ -1719,9 +1823,9 @@ async function confirmClose() {
   });
   const n = pendingCloseKeys.length;
   detailSelected.clear();
-  overridesDirty = true; saveOverridesLocal();
+  overridesDirty = true; saveOverridesLocal(true);
   cancelClose(); refreshAfterOverride();
-  showToast(`✓ ${n} discrepanc${n === 1 ? 'y' : 'ies'} closed — syncing…`);
+  showToast(`✓ ${n} discrepanc${n === 1 ? 'y' : 'ies'} closed${getToken() ? ' — saving to GitHub…' : ''}`);
   pushOverrides(false);
 }
 async function reopenRecord(k) {
@@ -1729,9 +1833,9 @@ async function reopenRecord(k) {
   const o = OVERRIDES[k]; if (!o) return;
   if (!confirm(`Reopen ${o.employee || 'this record'} (${o.month})? It will go back to "${o.prevStatus || 'Open'}".`)) return;
   OVERRIDES[k] = Object.assign({}, o, { action: 'reopen', at: new Date().toISOString(), by: currentUser.displayName });
-  overridesDirty = true; saveOverridesLocal();
+  overridesDirty = true; saveOverridesLocal(true);
   refreshAfterOverride(); renderClosuresPanel();
-  showToast('✓ Reopened — syncing…');
+  showToast('✓ Reopened' + (getToken() ? ' — saving to GitHub…' : ''));
   pushOverrides(false);
 }
 
@@ -1881,10 +1985,13 @@ function exportDetail() {
 // ══════════════════════════════════════
 //  MANUAL CLOSURES PANEL
 // ══════════════════════════════════════
-function openClosuresPanel() {
+function openClosuresPanel(fromChange = false) {
   document.getElementById('ghTokenInput').value = '';
+  document.getElementById('ghSetup').open = !getToken();
+  document.getElementById('connectNudge').style.display = fromChange === true ? 'block' : 'none';
   renderClosuresPanel();
   document.getElementById('closuresModal').classList.add('open');
+  if (!getToken()) setTimeout(() => document.getElementById('ghTokenInput').focus(), 80);
 }
 function closeClosuresPanel() { document.getElementById('closuresModal').classList.remove('open'); }
 document.getElementById('closuresModal').addEventListener('click', e => { if (e.target.id === 'closuresModal') closeClosuresPanel(); });
@@ -1894,12 +2001,13 @@ function renderClosuresPanel() {
   const token = getToken();
   const active = Object.entries(OVERRIDES).filter(([, o]) => o.action === 'close');
   let dot, msg;
-  if (!token) { dot = 'var(--yellow)'; msg = '<strong>Not connected to GitHub.</strong> Closures are saved on this browser only and other users won\'t see them. Add a token below to share them.'; }
-  else if (lastSyncError) { dot = 'var(--red)'; msg = '<strong>Last sync failed:</strong> ' + escHtml(lastSyncError); }
-  else if (overridesDirty) { dot = 'var(--yellow)'; msg = '<strong>Changes waiting to sync.</strong> Click Sync now.'; }
-  else { dot = 'var(--green)'; msg = '<strong>Connected and up to date.</strong>' + (lastSyncAt ? ' Last synced ' + lastSyncAt.toLocaleTimeString() + '.' : ''); }
+  if (!token) { dot = 'var(--yellow)'; msg = '<strong>Not connected to GitHub.</strong> Changes stay in this browser only, so other users can\'t see them and data.json is not updated. Add a token below — any unsaved changes are saved as soon as you connect.'; }
+  else if (ghState === 'saving') { dot = 'var(--link)'; msg = '<strong>Saving to data.json on GitHub…</strong>'; }
+  else if (lastSyncError) { dot = 'var(--red)'; msg = '<strong>Last save failed:</strong> ' + escHtml(lastSyncError); }
+  else if (overridesDirty || dataDirty) { dot = 'var(--yellow)'; msg = '<strong>Changes waiting to be saved.</strong> Click Save now.'; }
+  else { dot = 'var(--green)'; msg = '<strong>Connected. data.json on GitHub is up to date.</strong>' + (lastSyncAt ? ' Last saved ' + lastSyncAt.toLocaleTimeString() + '.' : ''); }
   const addedCount = Object.values(ADDED).filter(a => !a.deleted).length;
-  box.innerHTML = `<span class="sync-dot" style="background:${dot}"></span>${msg}<br><span style="color:var(--muted);font-size:12px">${addedCount} added · ${active.length} closed manually · stored in ${GH_REPO}/${GH_OVR_PATH}</span>`;
+  box.innerHTML = `<span class="sync-dot" style="background:${dot}"></span>${msg}<br><span style="color:var(--muted);font-size:12px">${addedCount} added · ${active.length} closed manually · saved in ${GH_REPO}/data.json</span>`;
   const added = Object.entries(ADDED).filter(([, a]) => !a.deleted).sort((a, b) => new Date(b[1].at) - new Date(a[1].at));
   document.getElementById('addedBody').innerHTML = added.length ? added.map(([id, a]) => {
     const r = a.record, live = allData.find(x => x._added && x._added.id === id);
@@ -1924,17 +2032,19 @@ function saveToken() {
   if (!t) { showToast('⚠ Paste a token first', true); return; }
   try { localStorage.setItem('ar_gh_token', t); } catch(e) {}
   document.getElementById('ghTokenInput').value = '';
-  lastSyncError = '';
-  showToast('✓ Token saved on this browser — syncing…');
-  pushOverrides(false);
+  lastSyncError = ''; connectPrompted = true;
+  document.getElementById('ghSetup').open = false;
+  document.getElementById('connectNudge').style.display = 'none';
+  showToast('✓ Token saved on this browser — saving to GitHub…');
+  pushToGitHub(false);
 }
 function removeToken() {
   try { localStorage.removeItem('ar_gh_token'); } catch(e) {}
-  renderClosuresPanel(); showToast('✓ Token removed from this browser');
+  renderClosuresPanel(); renderGhPill(); showToast('✓ Token removed from this browser');
 }
 async function syncNow() {
-  if (getToken()) { await pushOverrides(false); }
-  else { await loadOverrides(); refreshAfterOverride(); renderClosuresPanel(); showToast('✓ Reloaded closures from GitHub'); }
+  if (getToken()) { await pushToGitHub(false); }
+  else { await loadDashboard(); renderClosuresPanel(); showToast('✓ Reloaded data.json from GitHub'); }
 }
 function exportClosures() {
   const rows = Object.values(OVERRIDES).filter(o => o.action === 'close').map(o => ({
@@ -2085,10 +2195,10 @@ function saveNewDiscrepancy() {
   if (allData.some(r => recordKey(r) === k)) { err('This discrepancy already exists (same client, carrier, employee ID, plan, month and type).'); return; }
   const id = 'ADD-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   ADDED[id] = { record: rec, by: currentUser.displayName, at: new Date().toISOString() };
-  overridesDirty = true; saveOverridesLocal();
+  overridesDirty = true; saveOverridesLocal(true);
   closeAddForm();
   rebuildFilters(); refreshAfterOverride(); rebuildFilters();
-  showToast(`✓ Added ${rec['Employee Name']} (${rec['Month']}) — syncing…`);
+  showToast(`✓ Added ${rec['Employee Name']} (${rec['Month']})${getToken() ? ' — saving to GitHub…' : ''}`);
   pushOverrides(false);
 }
 
@@ -2096,9 +2206,9 @@ function removeAdded(id) {
   const a = ADDED[id]; if (!a || !isAdminUser()) return;
   if (!confirm(`Remove the added discrepancy for ${a.record['Employee Name']} (${a.record['Month']})? Use this only for entries added by mistake. To resolve a real discrepancy, close it instead.`)) return;
   ADDED[id] = Object.assign({}, a, { deleted: true, at: new Date().toISOString(), by: currentUser.displayName });
-  overridesDirty = true; saveOverridesLocal();
+  overridesDirty = true; saveOverridesLocal(true);
   refreshAfterOverride(); rebuildFilters(); renderClosuresPanel();
-  showToast('✓ Removed — syncing…');
+  showToast('✓ Removed' + (getToken() ? ' — saving to GitHub…' : ''));
   pushOverrides(false);
 }
 
@@ -2294,6 +2404,177 @@ async function copyCrm(which) {
   try { await navigator.clipboard.writeText(el.value); }
   catch(e) { el.focus(); el.select(); document.execCommand('copy'); }
   showToast(which === 'subject' ? '✓ Subject copied' : '✓ Message copied — paste it into Help Scout');
+}
+
+// ══════════════════════════════════════
+//  DOWNLOAD SOURCE DATA (masterfile with manual changes)
+// ══════════════════════════════════════
+// The original masterfile is kept in the repo as source.xlsx. Downloading opens that exact workbook,
+// sets Status to Closed for rows closed in the dashboard and appends rows added in the dashboard,
+// copying the formatting of the last data row. Other sheets, column widths, fonts, fills and number
+// formats are kept as they are.
+const GH_SRC_PATH = 'source.xlsx';
+const EXCELJS_URL = 'https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';
+let pendingSource = null;   // { name, b64 } uploaded here but not yet saved to GitHub
+try { pendingSource = JSON.parse(localStorage.getItem('ar_src_pending') || 'null'); } catch(e) {}
+
+function setPendingSource(name, b64) {
+  pendingSource = { name, b64 };
+  try { localStorage.setItem('ar_src_pending', JSON.stringify(pendingSource)); } catch(e) { /* too large for storage: kept in memory */ }
+}
+async function putSourceFile() {
+  const url = ghApi(GH_SRC_PATH);
+  const meta = await fetch(url + '?ref=' + GH_BRANCH + '&t=' + Date.now(), { headers: ghHeaders('application/vnd.github.object+json'), cache: 'no-store' });
+  if (meta.status !== 200 && meta.status !== 404) throw new Error(ghError(meta.status));
+  const sha = meta.status === 200 ? (await meta.json()).sha : null;
+  const body = { message: `Masterfile upload (${pendingSource.name}) by ${currentUser?.displayName || 'admin'}`, content: pendingSource.b64, branch: GH_BRANCH };
+  if (sha) body.sha = sha;
+  const put = await fetch(url, { method: 'PUT', headers: Object.assign(ghHeaders('application/vnd.github+json'), { 'Content-Type': 'application/json' }), body: JSON.stringify(body) });
+  if (!put.ok) throw new Error('Saving the masterfile: ' + ghError(put.status));
+  pendingSource = null;
+  try { localStorage.removeItem('ar_src_pending'); } catch(e) {}
+}
+
+function loadScriptOnce(src) {
+  if (window.ExcelJS) return Promise.resolve();
+  return new Promise((res, rej) => {
+    const el = document.createElement('script'); el.src = src;
+    el.onload = res; el.onerror = () => rej(new Error('Could not load the Excel library. Check your internet connection.'));
+    document.head.appendChild(el);
+  });
+}
+function b64ToBuf(b64) { const bin = atob(b64); const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u.buffer; }
+
+async function fetchSourceWorkbook() {
+  if (pendingSource) return { buf: b64ToBuf(pendingSource.b64), name: pendingSource.name };
+  const name = sourceMeta.fileName || 'Discrepancies Masterfile.xlsx';
+  try {
+    if (getToken()) {
+      const r = await fetch(ghApi(GH_SRC_PATH) + '?ref=' + GH_BRANCH + '&t=' + Date.now(), { headers: ghHeaders('application/vnd.github.raw+json'), cache: 'no-store' });
+      if (r.ok) return { buf: await r.arrayBuffer(), name };
+    } else {
+      const r = await fetch(`https://raw.githubusercontent.com/${GH_OWNER}/${GH_REPO}/${GH_BRANCH}/${GH_SRC_PATH}?t=${Date.now()}`, { cache: 'no-store' });
+      if (r.ok) return { buf: await r.arrayBuffer(), name };
+    }
+  } catch(e) {}
+  return null;
+}
+
+// Read an ExcelJS cell value the same way the dashboard reads the masterfile on upload
+function cellText(v, field) {
+  if (v === null || v === undefined) return '';
+  if (v instanceof Date) return MON3[v.getUTCMonth()] + '-' + String(v.getUTCFullYear()).slice(2);
+  if (typeof v === 'object') {
+    if (v.richText) return v.richText.map(t => t.text).join('').trim();
+    if ('result' in v) return cellText(v.result, field);
+    if (v.text !== undefined) return String(v.text).trim();
+    return '';
+  }
+  if (typeof v === 'number' && field !== 'Expected Adjustment' && field !== 'Employee ID' && v > 40000 && v < 60000) {
+    const d = new Date(Math.round((v - 25569) * 86400 * 1000));
+    return MON3[d.getUTCMonth()] + '-' + String(d.getUTCFullYear()).slice(2);
+  }
+  return String(v).trim();
+}
+
+function applyChangesToWorkbook(wb) {
+  const ws = wb.getWorksheet('Discrepancies') || wb.worksheets[0];
+  if (!ws) throw new Error('The masterfile has no worksheets.');
+  let hdr = 0, col = {};
+  for (let r = 1; r <= Math.min(15, ws.rowCount); r++) {
+    const m = {}; ws.getRow(r).eachCell((c, i) => { const t = cellText(c.value); if (t) m[t] = i; });
+    if (m['Status'] && m['Client']) { hdr = r; col = m; break; }
+  }
+  if (!hdr) throw new Error('Could not find the header row (Client … Status) in the masterfile.');
+  const missing = KEY_FIELDS.concat('Status').filter(f => !col[f]);
+  if (missing.length) throw new Error('Masterfile is missing column(s): ' + missing.join(', '));
+
+  // index existing rows by record key
+  const byKey = new Map(); let lastRow = hdr;
+  for (let r = hdr + 1; r <= ws.rowCount; r++) {
+    const row = ws.getRow(r), rec = {};
+    KEY_FIELDS.forEach(f => rec[f] = cellText(row.getCell(col[f]).value, f));
+    if (KEY_FIELDS.every(f => !rec[f])) continue;
+    lastRow = r;
+    const k = recordKey(rec);
+    if (!byKey.has(k)) byKey.set(k, []);
+    byKey.get(k).push(row);
+  }
+
+  // closed in the dashboard -> Status = Closed
+  let closed = 0;
+  for (const [k, o] of Object.entries(OVERRIDES)) {
+    if (o.action !== 'close') continue;
+    (byKey.get(k) || []).forEach(row => {
+      const c = row.getCell(col['Status']);
+      if (cellText(c.value).toLowerCase() !== 'closed') { c.value = 'Closed'; closed++; }
+    });
+  }
+
+  // added in the dashboard -> new rows formatted like the last data row
+  const tpl = ws.getRow(lastRow);
+  const lastCol = Math.max(ws.columnCount, ...Object.values(col));
+  let next = lastRow + 1, added = 0;
+  for (const a of Object.values(ADDED)) {
+    if (a.deleted || !a.record || byKey.has(recordKey(a.record))) continue;
+    const rec = a.record, row = ws.getRow(next++);
+    for (let i = 1; i <= lastCol; i++) {
+      const t = tpl.getCell(i);
+      row.getCell(i).style = JSON.parse(JSON.stringify(t.style || {}));
+    }
+    for (const [name, i] of Object.entries(col)) {
+      const t = tpl.getCell(i).value, c = row.getCell(i);
+      let v = rec[name];
+      if (v === undefined) { c.value = null; continue; }
+      if (name === 'Month') {
+        const x = /^([A-Za-z]{3})-(\d{2})$/.exec(v);
+        c.value = (t instanceof Date || typeof t === 'number') && x ? new Date(Date.UTC(2000 + +x[2], MON3.indexOf(x[1]), 1)) : v;
+      } else if (name === 'Employee ID') {
+        c.value = typeof t === 'number' && /^[1-9]\d{0,14}$/.test(v) ? Number(v) : v;
+      } else if (name === 'Expected Adjustment') {
+        const n = adjNum(v); c.value = n === null ? null : n;
+      } else c.value = v;
+    }
+    if (tpl.height) row.height = tpl.height;
+    row.commit(); added++;
+  }
+  if (ws.autoFilter && typeof ws.autoFilter === 'string') ws.autoFilter = ws.autoFilter.replace(/\d+$/, String(Math.max(next - 1, lastRow)));
+  return { closed, added, sheet: ws.name };
+}
+
+function buildWorkbookFromRecords() {
+  const wb = new ExcelJS.Workbook(), ws = wb.addWorksheet('Discrepancies');
+  const rows = applyOverrides(sourceData).map(r => { const o = {}; for (const k in r) if (!k.startsWith('_')) o[k] = r[k]; return o; });
+  const cols = [...new Set(rows.flatMap(r => Object.keys(r)))];
+  ws.columns = cols.map(c => ({ header: c, key: c, width: Math.min(40, Math.max(12, c.length + 4)) }));
+  rows.forEach(r => { const n = adjNum(r['Expected Adjustment']); ws.addRow(Object.assign({}, r, { 'Expected Adjustment': n === null ? null : n })); });
+  ws.getRow(1).font = { bold: true };
+  ws.views = [{ state: 'frozen', ySplit: 1 }];
+  ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: cols.length } };
+  return { wb, closed: rows.filter(r => r['Status'] === 'Closed').length, added: Object.values(ADDED).filter(a => !a.deleted).length };
+}
+
+async function downloadSourceData() {
+  if (!isAdminUser()) return;
+  const btn = document.getElementById('dlSourceBtn'); btn.disabled = true;
+  showToast('Preparing the masterfile…');
+  try {
+    await loadScriptOnce(EXCELJS_URL);
+    const src = await fetchSourceWorkbook();
+    let wb, stats, exact = !!src, base = (src?.name || sourceMeta.fileName || 'Discrepancies Masterfile.xlsx').replace(/\.xls[xm]?$/i, '');
+    if (src) { wb = new ExcelJS.Workbook(); await wb.xlsx.load(src.buf); stats = applyChangesToWorkbook(wb); }
+    else { const b = buildWorkbookFromRecords(); wb = b.wb; stats = b; }
+    const out = await wb.xlsx.writeBuffer();
+    const blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = `${base.replace(/ - Updated \d{4}-\d{2}-\d{2}$/, '')} - Updated ${new Date().toISOString().slice(0, 10)}.xlsx`;
+    a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    showToast(exact
+      ? `✓ Downloaded — ${stats.closed} row${stats.closed !== 1 ? 's' : ''} set to Closed, ${stats.added} row${stats.added !== 1 ? 's' : ''} added`
+      : '✓ Downloaded. Upload the masterfile once with Refresh File so future downloads keep its exact formatting');
+  } catch(e) {
+    showToast('⚠ Download failed: ' + e.message, true);
+  } finally { btn.disabled = false; }
 }
 
 function toggleTheme() {
