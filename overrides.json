@@ -1,0 +1,36 @@
+{
+ "updatedAt": "2026-10-13T07:08:00.800Z",
+ "overrides": {
+  "flora fg||cigna||`000805440||medical||sep-26||inaccurate adjustment is processed by carrier": {
+   "action": "close",
+   "status": "Closed",
+   "prevStatus": "Pending",
+   "note": "Per Con#483488 Juan confirmed to close",
+   "by": "Administrator",
+   "at": "2026-10-13T06:07:01.680Z",
+   "employee": "Cohen, Grant",
+   "employeeId": "`000805440",
+   "client": "Flora FG",
+   "carrier": "Cigna",
+   "planType": "Medical",
+   "month": "Sep-26",
+   "comments": "Inaccurate Adjustment is processed by Carrier"
+  },
+  "flora fg||cigna||`000805440||dental||sep-26||inaccurate adjustment is processed by carrier": {
+   "action": "close",
+   "status": "Closed",
+   "prevStatus": "Pending",
+   "note": "Per Con#483488 Juan confirmed to close",
+   "by": "Administrator",
+   "at": "2026-10-13T06:07:01.680Z",
+   "employee": "Cohen, Grant",
+   "employeeId": "`000805440",
+   "client": "Flora FG",
+   "carrier": "Cigna",
+   "planType": "Dental",
+   "month": "Sep-26",
+   "comments": "Inaccurate Adjustment is processed by Carrier"
+  }
+ },
+ "added": {}
+}
