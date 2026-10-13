@@ -269,6 +269,19 @@
   .gh-setup ol { margin: 10px 0 8px 20px; }
   .gh-setup p { color: var(--muted); font-size: 12.5px; }
 
+  .age-split { height: 4px; border-radius: 2px; background: var(--yellow); margin: 5px auto 5px; width: 70%; overflow: hidden; }
+  .age-split span { display: block; height: 100%; background: var(--red); filter: brightness(1.15); }
+  .sel-bar { display: none; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+  .sel-bar.show { display: flex; }
+  body:not(.is-admin) .sel-bar.show { display: none; }
+  .sel-bar #tableSelInfo { font-weight: 600; margin-right: 4px; }
+  .sel-bar .btn-primary, .sel-bar .btn-success, .sel-bar .btn-secondary { padding: 6px 12px; font-size: 12.5px; }
+  .link-btn { background: none; border: none; color: var(--link); font-size: 12.5px; cursor: pointer; text-decoration: underline; font-family: var(--font); padding: 0 4px; }
+  tr.row-selected td { background: rgba(var(--accent-rgb), .07); }
+  .row-actions { display: inline-flex; gap: 6px; }
+  .row-btn.report-it:hover { border-color: var(--link); color: var(--link); }
+  .crm-note { display: none; font-size: 12.5px; padding: 8px 18px; background: rgba(var(--accent-rgb), .07); border-bottom: 1px solid var(--border); }
+
   /* ── BRAND ── */
   .wfj-badge { display: inline-flex; align-items: center; gap: 8px; background: #fff; border-radius: 10px; padding: 6px 11px; box-shadow: 0 1px 3px rgba(0,0,0,.3); flex-shrink: 0; }
   .wfj-mark { height: 28px; width: auto; display: block; }
@@ -660,8 +673,8 @@
     </div>
 
     <div class="chart-card" style="margin-bottom:22px;">
-      <div class="chart-title">Discrepancy Age — Open Records by Month</div>
-      <div class="age-bar-label">Each cell = one billing month. Older open items = higher aging risk.</div>
+      <div class="chart-title">Discrepancy Age — Open &amp; Pending Records by Month</div>
+      <div class="age-bar-label">Each cell = one billing month (open + pending). Older items = higher aging risk. Click a month to list its open and pending records below.</div>
       <div class="age-grid" id="ageGrid"></div>
     </div>
 
@@ -677,11 +690,19 @@
           <div class="table-title">Discrepancy Records</div>
           <div class="table-count" id="tableCount"></div>
         </div>
+        <div class="sel-bar admin-only" id="tableSelBar">
+          <span id="tableSelInfo"></span>
+          <button class="link-btn" id="tableSelAllFiltered"></button>
+          <button class="btn-primary" onclick="reportSelected()">Report to CRM</button>
+          <button class="btn-success" onclick="startClose([...tableSel])">Close selected</button>
+          <button class="btn-secondary" onclick="clearTableSel()">Clear</button>
+        </div>
       </div>
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
+              <th class="admin-only" style="width:34px"><input type="checkbox" class="chk" id="tableSelAll" title="Select all open and pending records on this page"></th>
               <th data-col="Client">Client <span class="sort-arrow">↕</span></th>
               <th data-col="Carrier">Carrier <span class="sort-arrow">↕</span></th>
               <th data-col="Employee Name">Employee <span class="sort-arrow">↕</span></th>
@@ -845,8 +866,9 @@
         <div class="crm-controls">
           <div class="filter-group"><label>Client</label><select id="crmClient"></select></div>
           <div class="filter-group"><label>Carrier</label><select id="crmCarrier"></select></div>
-          <label class="inline-check"><input type="checkbox" class="chk" id="crmIncludeOpen"> Include Open</label>
+          <label class="inline-check" id="crmOpenWrap"><input type="checkbox" class="chk" id="crmIncludeOpen"> Include Open</label>
         </div>
+        <div class="crm-note" id="crmNote"></div>
         <div class="crm-controls" style="padding-top:8px;padding-bottom:8px">
           <label class="inline-check" style="padding:0"><input type="checkbox" class="chk" id="crmSelAll" checked> Select all</label>
           <span class="page-info" id="crmSelCount" style="margin-left:auto"></span>
@@ -1356,6 +1378,24 @@ function rebuildFilters() {
   }
 }
 
+// One row passes all dashboard filters (dropdowns, search, chart clicks). `ignore` skips chart filters.
+function rowPasses(r, ignore = []) {
+  const v = id => document.getElementById(id).value;
+  const fSearch = v('fSearch').toLowerCase();
+  if (v('fClient')   && r['Client']    !== v('fClient'))   return false;
+  if (v('fCarrier')  && r['Carrier']   !== v('fCarrier'))  return false;
+  if (v('fPlanType') && r['Plan Type'] !== v('fPlanType')) return false;
+  if (v('fStatus')   && r['Status']    !== v('fStatus'))   return false;
+  if (v('fMonth')    && r['Month']     !== v('fMonth'))    return false;
+  if (v('fPartner')  && r['Partner']   !== v('fPartner'))  return false;
+  if (fSearch && !String(r['Employee Name']).toLowerCase().includes(fSearch) && !String(r['Employee ID']).toLowerCase().includes(fSearch)) return false;
+  for (const f of ['Client','Carrier','Status','Comments','Month']) {
+    if (!ignore.includes(f) && chartFilters[f] && r[f] !== chartFilters[f]) return false;
+  }
+  if (!ignore.includes('Outstanding') && chartFilters['Outstanding'] && r['Status'] !== 'Open' && r['Status'] !== 'Pending') return false;
+  return true;
+}
+
 function applyFilters() {
   const fClient  = document.getElementById('fClient').value;
   const fCarrier = document.getElementById('fCarrier').value;
@@ -1365,21 +1405,7 @@ function applyFilters() {
   const fPartner = document.getElementById('fPartner').value;
   const fSearch  = document.getElementById('fSearch').value.toLowerCase();
 
-  filtered = scopedData.filter(r => {
-    if (fClient  && r['Client']    !== fClient)  return false;
-    if (fCarrier && r['Carrier']   !== fCarrier) return false;
-    if (fPlanType&& r['Plan Type'] !== fPlanType)return false;
-    if (fStatus  && r['Status']    !== fStatus)  return false;
-    if (fMonth   && r['Month']     !== fMonth)   return false;
-    if (fPartner && r['Partner']   !== fPartner) return false;
-    if (fSearch  && !r['Employee Name'].toLowerCase().includes(fSearch) && !r['Employee ID'].includes(fSearch)) return false;
-    if (chartFilters['Client']   && r['Client']   !== chartFilters['Client'])   return false;
-    if (chartFilters['Carrier']  && r['Carrier']  !== chartFilters['Carrier'])  return false;
-    if (chartFilters['Status']   && r['Status']   !== chartFilters['Status'])   return false;
-    if (chartFilters['Comments'] && r['Comments'] !== chartFilters['Comments']) return false;
-    if (chartFilters['Month']    && r['Month']    !== chartFilters['Month'])    return false;
-    return true;
-  });
+  filtered = scopedData.filter(r => rowPasses(r));
   page = 1;
   sortData();
   renderKPIs();
@@ -1430,8 +1456,16 @@ function renderKPIs() {
 
 function setChartFilter(field, value) {
   if (chartFilters[field]===value) delete chartFilters[field]; else chartFilters[field]=value;
+  if (field === 'Month' && !chartFilters['Month']) delete chartFilters['Outstanding'];
   renderChartFilterChips();
   applyFilters();
+}
+// Clicking a month in the age grid shows only that month's Open + Pending records
+function setAgeFilter(m) {
+  if (chartFilters['Month'] === m && chartFilters['Outstanding']) { delete chartFilters['Month']; delete chartFilters['Outstanding']; }
+  else { chartFilters['Month'] = m; chartFilters['Outstanding'] = 'Open & Pending'; }
+  renderChartFilterChips(); applyFilters();
+  setTimeout(() => document.getElementById('chartFilterBar').scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
 }
 function clearChartFilters() { chartFilters={}; renderChartFilterChips(); applyFilters(); }
 function renderChartFilterChips() {
@@ -1441,7 +1475,7 @@ function renderChartFilterChips() {
   if(!entries.length){bar.classList.remove('visible');chipsEl.innerHTML='';return;}
   bar.classList.add('visible');
   chipsEl.innerHTML=entries.map(([f,v])=>
-    `<span class="chart-filter-chip">${f}: ${v}<button class="chip-remove" onclick="setChartFilter('${f.replace(/'/g,"\\'")}','${v.replace(/'/g,"\\'")}')">×</button></span>`
+    `<span class="chart-filter-chip">${f === 'Outstanding' ? 'Status' : f}: ${v}<button class="chip-remove" onclick="setChartFilter('${f.replace(/'/g,"\\'")}','${v.replace(/'/g,"\\'")}')">×</button></span>`
   ).join('');
 }
 
@@ -1511,22 +1545,29 @@ function renderCharts() {
 
 function renderAgeGrid() {
   const grid=document.getElementById('ageGrid');
-  const months=[...new Set(filtered.map(r=>r['Month']).filter(Boolean))].sort((a,b)=>monthRank(a)-monthRank(b));
+  const base=scopedData.filter(r=>rowPasses(r,['Month','Outstanding']));   // keep every month visible after a click
+  const months=[...new Set(base.map(r=>r['Month']).filter(Boolean))].sort((a,b)=>monthRank(a)-monthRank(b));
   if(!months.length){grid.innerHTML='<div style="color:var(--muted);font-size:13px">No data</div>';return;}
   const maxAge=months.length-1;
   grid.innerHTML=months.map((m,idx)=>{
-    const mRows=filtered.filter(r=>r['Month']===m);
+    const mRows=base.filter(r=>r['Month']===m);
     const openCnt=mRows.filter(r=>r['Status']==='Open').length;
-    const total=mRows.length;
+    const pendCnt=mRows.filter(r=>r['Status']==='Pending').length;
+    const out=openCnt+pendCnt, total=mRows.length;
     const age=maxAge-idx;
-    const intensity=openCnt>0?Math.min(0.9,0.2+(age/Math.max(maxAge,1))*0.7):0.05;
-    const bg=openCnt>0?`rgba(var(--red-rgb),${intensity})`:'var(--surface)';
-    const isActive=chartFilters['Month']===m;
-    return `<div class="age-cell${isActive?' chart-active':''}" onclick="setChartFilter('Month','${m}')"
-      style="background:${bg};border-color:${isActive?'var(--accent)':openCnt>0?'rgba(var(--red-rgb),0.4)':'var(--border)'}">
-      <div class="age-month" style="color:${intensity>0.5?'rgba(255,255,255,0.7)':'var(--muted)'}">${m}</div>
-      <div class="age-open" style="color:${openCnt>0?(intensity>0.5?'#fff':'var(--red)'):'var(--muted)'}">${openCnt}</div>
-      <div class="age-total" style="color:${intensity>0.5?'rgba(255,255,255,0.6)':'var(--muted)'}">open / ${total} total</div>
+    const intensity=out>0?Math.min(0.9,0.2+(age/Math.max(maxAge,1))*0.7):0.05;
+    const strong=intensity>0.5;
+    const bg=out>0?`rgba(var(--red-rgb),${intensity})`:'var(--surface)';
+    const isActive=chartFilters['Month']===m && !!chartFilters['Outstanding'];
+    const oPct=out?Math.round(openCnt/out*100):0;
+    return `<div class="age-cell${isActive?' chart-active':''}" role="button" tabindex="0" title="Show ${escHtml(m)} open and pending records"
+      onclick="setAgeFilter('${String(m).replace(/'/g,"\\'")}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}"
+      style="background:${bg};border-color:${isActive?'var(--accent)':out>0?'rgba(var(--red-rgb),0.4)':'var(--border)'}">
+      <div class="age-month" style="color:${strong?'rgba(255,255,255,0.8)':'var(--muted)'}">${escHtml(m)}</div>
+      <div class="age-open" style="color:${out>0?(strong?'#fff':'var(--red)'):'var(--muted)'}">${out}</div>
+      <div class="age-split" title="${openCnt} open, ${pendCnt} pending"><span style="width:${oPct}%"></span></div>
+      <div class="age-total" style="color:${strong?'rgba(255,255,255,0.85)':'var(--muted)'}">${openCnt} open · ${pendCnt} pending</div>
+      <div class="age-total" style="color:${strong?'rgba(255,255,255,0.65)':'var(--muted)'}">of ${total} total</div>
     </div>`;
   }).join('');
 }
@@ -1541,7 +1582,9 @@ function renderTable() {
     const adj=parseFloat(String(r['Expected Adjustment']||'').replace(/[$,\s]/g,''));
     const adjStr=isNaN(adj)?(r['Expected Adjustment']||'—'):(adj>=0?'+$'+adj.toFixed(2):'-$'+Math.abs(adj).toFixed(2));
     const adjClass=isNaN(adj)?'':adj<0?'adj-neg':adj>0?'adj-pos':'';
-    return `<tr>
+    const k=recordKey(r), canSel=status!=='Closed';
+    return `<tr class="${tableSel.has(k)?'row-selected':''}">
+      <td class="admin-only">${canSel?`<input type="checkbox" class="chk" data-tsel="${escHtml(k)}" ${tableSel.has(k)?'checked':''} aria-label="Select ${escHtml(r['Employee Name'])}">`:''}</td>
       <td>${r['Client']}</td><td>${r['Carrier']}</td><td>${r['Employee Name']}</td>
       <td>${r['Employee ID']}</td><td>${r['Plan Type']}</td><td>${r['Month']}</td>
       <td class="${adjClass}">${adjStr}</td>
@@ -1553,6 +1596,7 @@ function renderTable() {
   }).join('');
   document.getElementById('tableCount').textContent=`Showing ${start+1}–${Math.min(start+PAGE_SIZE,filtered.length)} of ${filtered.length} records`;
   renderPagination();
+  renderTableSel();
 }
 
 function renderPagination() {
@@ -1778,11 +1822,46 @@ function actionCell(r) {
   const k = escHtml(recordKey(r));
   if (r._manual) return `<button class="row-btn reopen-it" data-reopen="${k}">Reopen</button>`;
   if (r['Status'] === 'Closed') return '<span style="color:var(--muted);font-size:12px">—</span>';
-  return `<button class="row-btn close-it" data-close="${k}">Close</button>`;
+  return `<span class="row-actions"><button class="row-btn report-it" data-report="${k}" title="Draft a CRM message for this record">Report</button><button class="row-btn close-it" data-close="${k}">Close</button></span>`;
 }
+
+// ── Table selection (open + pending records) ──
+const tableSel = new Set();
+function eligibleFiltered() { return filtered.filter(r => r['Status'] !== 'Closed'); }
+function renderTableSel() {
+  // drop selections that are no longer open/pending
+  for (const k of [...tableSel]) { const r = allData.find(x => recordKey(x) === k); if (!r || r['Status'] === 'Closed') tableSel.delete(k); }
+  const bar = document.getElementById('tableSelBar'), n = tableSel.size;
+  bar.classList.toggle('show', n > 0);
+  document.getElementById('tableSelInfo').textContent = `${n} selected`;
+  const elig = eligibleFiltered(), allIn = elig.length > 0 && elig.every(r => tableSel.has(recordKey(r)));
+  const more = document.getElementById('tableSelAllFiltered');
+  more.style.display = !allIn && elig.length > n ? 'inline' : 'none';
+  more.textContent = `Select all ${elig.length} open & pending in this list`;
+  const start = (page - 1) * PAGE_SIZE, pageElig = filtered.slice(start, start + PAGE_SIZE).filter(r => r['Status'] !== 'Closed');
+  const hdr = document.getElementById('tableSelAll');
+  hdr.checked = pageElig.length > 0 && pageElig.every(r => tableSel.has(recordKey(r)));
+  hdr.disabled = pageElig.length === 0;
+}
+function clearTableSel() { tableSel.clear(); renderTable(); }
+function reportSelected() { if (tableSel.size) openCrm([...tableSel]); }
+document.getElementById('tableBody').addEventListener('change', e => {
+  const k = e.target.dataset.tsel; if (k === undefined) return;
+  e.target.checked ? tableSel.add(k) : tableSel.delete(k);
+  e.target.closest('tr').classList.toggle('row-selected', e.target.checked);
+  renderTableSel();
+});
+document.getElementById('tableSelAll').addEventListener('change', e => {
+  const start = (page - 1) * PAGE_SIZE;
+  filtered.slice(start, start + PAGE_SIZE).filter(r => r['Status'] !== 'Closed').forEach(r => e.target.checked ? tableSel.add(recordKey(r)) : tableSel.delete(recordKey(r)));
+  renderTable();
+});
+document.getElementById('tableSelAllFiltered').addEventListener('click', () => { eligibleFiltered().forEach(r => tableSel.add(recordKey(r))); renderTable(); });
 
 // Delegated clicks for Close / Reopen buttons anywhere in the page
 document.addEventListener('click', e => {
+  const rp = e.target.closest('[data-report]');
+  if (rp) { openCrm([rp.dataset.report]); return; }
   const c = e.target.closest('[data-close]');
   if (c) { startClose([c.dataset.close]); return; }
   const r = e.target.closest('[data-reopen]');
@@ -1822,7 +1901,7 @@ async function confirmClose() {
       carrier: r?.['Carrier'] || '', planType: r?.['Plan Type'] || '', month: r?.['Month'] || '', comments: r?.['Comments'] || '' };
   });
   const n = pendingCloseKeys.length;
-  detailSelected.clear();
+  detailSelected.clear(); pendingCloseKeys.forEach(k => tableSel.delete(k));
   overridesDirty = true; saveOverridesLocal(true);
   cancelClose(); refreshAfterOverride();
   showToast(`✓ ${n} discrepanc${n === 1 ? 'y' : 'ies'} closed${getToken() ? ' — saving to GitHub…' : ''}`);
@@ -2265,14 +2344,28 @@ function adjText(v) {
   return 'Amount: $0.00';
 }
 
+let crmFixed = null;   // Set of record keys when the CRM report is opened from the table
 function crmPool() {
+  if (crmFixed) return allData.filter(r => crmFixed.has(recordKey(r)) && r['Status'] !== 'Closed');
   const incOpen = document.getElementById('crmIncludeOpen').checked;
   return scopedData.filter(r => r['Status'] === 'Pending' || (incOpen && r['Status'] === 'Open'));
 }
-function openCrm() {
+function openCrm(keys) {
   if (!isAdminUser()) return;
+  crmFixed = Array.isArray(keys) && keys.length ? new Set(keys) : null;
   document.getElementById('crmTo').value = '';
+  document.getElementById('crmOpenWrap').style.display = crmFixed ? 'none' : '';
   fillCrmClients();
+  if (crmFixed) {
+    const first = allData.find(r => crmFixed.has(recordKey(r)) && r['Status'] !== 'Closed');
+    if (!first) { showToast('⚠ Those records are already closed', true); return; }
+    document.getElementById('crmClient').value = first['Client'];
+    fillCrmCarriers(); document.getElementById('crmCarrier').value = first['Carrier'];
+    resetCrmSelection(); renderCrmNote();
+    document.getElementById('crmModal').classList.add('open');
+    return;
+  }
+  renderCrmNote();
   const fc = document.getElementById('fClient').value;
   if (fc && [...document.getElementById('crmClient').options].some(o => o.value === fc)) document.getElementById('crmClient').value = fc;
   fillCrmCarriers();
@@ -2307,8 +2400,16 @@ function crmRows() {
 function resetCrmSelection() { crmSel = new Set(crmRows().map(recordKey)); renderCrm(); }
 
 document.getElementById('crmIncludeOpen').addEventListener('change', () => { fillCrmClients(); fillCrmCarriers(); resetCrmSelection(); });
-document.getElementById('crmClient').addEventListener('change', () => { fillCrmCarriers(); resetCrmSelection(); });
-document.getElementById('crmCarrier').addEventListener('change', resetCrmSelection);
+document.getElementById('crmClient').addEventListener('change', () => { fillCrmCarriers(); resetCrmSelection(); renderCrmNote(); });
+document.getElementById('crmCarrier').addEventListener('change', () => { resetCrmSelection(); renderCrmNote(); });
+function renderCrmNote() {
+  const el = document.getElementById('crmNote');
+  if (!crmFixed) { el.style.display = 'none'; return; }
+  const pool = crmPool(), groups = new Set(pool.map(r => r['Client'] + '|' + r['Carrier'])).size;
+  el.style.display = 'block';
+  el.innerHTML = pool.length === 1 ? 'Drafting for the record you picked.'
+    : `Drafting from your <strong>${pool.length}</strong> selected records` + (groups > 1 ? ` across <strong>${groups}</strong> client/carrier groups. Each group gets its own draft — switch with Client and Carrier above.` : '.');
+}
 document.getElementById('crmTo').addEventListener('input', buildCrmDraft);
 document.getElementById('crmSelAll').addEventListener('change', e => { crmSel = e.target.checked ? new Set(crmRows().map(recordKey)) : new Set(); renderCrm(); });
 document.getElementById('crmBody').addEventListener('change', e => {
@@ -2369,7 +2470,7 @@ function buildCrmDraft() {
   const to = document.getElementById('crmTo').value.trim();
   const L = [];
   L.push(`Hi ${to || 'team'},`, '');
-  L.push(`We completed the ${carrier} invoice reconciliation for ${client} and found ${n} ${statusWord} discrepanc${n === 1 ? 'y' : 'ies'} that need${n === 1 ? 's' : ''} follow-up. Each one is explained below with the employee's name and ID, and what we need from ${carrier} or the client.`, '');
+  L.push(`We completed the ${carrier} invoice reconciliation for ${client} and found ${n} ${statusWord} discrepanc${n === 1 ? 'y' : 'ies'} that need${n === 1 ? 's' : ''} follow-up. ${n === 1 ? 'It is' : 'Each one is'} explained below with the employee's name and ID, and what we need from ${carrier} or the client.`, '');
   L.push('SUMMARY');
   L.push(`- Employees affected: ${emps}`);
   L.push(`- Billing month${months.length > 1 ? 's' : ''}: ${months.join(', ')}`);
