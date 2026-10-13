@@ -23,6 +23,7 @@
     --link: #1D5F93; --on-accent: #FFFFFF;
     --green: #2E7D57; --green-rgb: 46,125,87; --yellow: #B7791F; --yellow-rgb: 183,121,31; --red: #C0392B; --red-rgb: 192,57,43;
     --header-bg: #023960; --header-border: #01294A;
+    --age-rgb: 2,57,96; --age-on: #FFFFFF; --age-on-soft: rgba(255,255,255,.75);
     --shadow: 0 1px 2px rgba(7,30,41,.05), 0 6px 18px rgba(7,30,41,.06);
     --overlay: rgba(7,30,41,.45);
     --c1:#023960; --c2:#2F6E9E; --c3:#666666; --c4:#5E9CC8; --c5:#8FA2B3; --c6:#1F4E79; --c7:#A5AFB7; --c8:#3F86B8;
@@ -37,6 +38,7 @@
     --link: #8DBDE6; --on-accent: #06131C;
     --green: #4CB884; --green-rgb: 76,184,132; --yellow: #E0A848; --yellow-rgb: 224,168,72; --red: #E8675B; --red-rgb: 232,103,91;
     --header-bg: #0A1924; --header-border: #1A3242;
+    --age-rgb: 110,168,218; --age-on: #06131C; --age-on-soft: rgba(6,19,28,.75);
     --shadow: none;
     --overlay: rgba(0,0,0,.6);
     --c1:#6EA8DA; --c2:#4F86B8; --c3:#A3A9AE; --c4:#9CC3E4; --c5:#7F99AE; --c6:#3D6E9C; --c7:#C3CCD3; --c8:#5FA0CF;
@@ -177,7 +179,7 @@
   .age-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
   .age-cell { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px 6px; text-align: center; transition: background .2s, outline .15s; cursor: pointer; }
   .age-cell:hover { border-color: var(--accent); }
-  .age-cell.chart-active { outline: 2px solid var(--accent); }
+  .age-cell.chart-active { outline: 2px solid var(--link); outline-offset: 2px; }
   .age-month { font-size: 11px; color: var(--muted); margin-bottom: 4px; }
   .age-open { font-size: 18px; font-weight: 700; }
   .age-total { font-size: 10px; color: var(--muted); }
@@ -281,6 +283,12 @@
   .row-actions { display: inline-flex; gap: 6px; }
   .row-btn.report-it:hover { border-color: var(--link); color: var(--link); }
   .crm-note { display: none; font-size: 12.5px; padding: 8px 18px; background: rgba(var(--accent-rgb), .07); border-bottom: 1px solid var(--border); }
+
+  .btn-warning { background: var(--yellow); border: none; color: #fff; border-radius: 7px; padding: 8px 18px; font-size: 13px; font-weight: 700; font-family: var(--font); cursor: pointer; }
+  .sel-bar .btn-warning { padding: 6px 12px; font-size: 12.5px; }
+  :root[data-theme="dark"] .btn-warning { color: #06131C; }
+  .row-btn.pend-it:hover { border-color: var(--yellow); color: var(--yellow); }
+  .manual-tag.pend { color: var(--yellow); border-color: rgba(var(--yellow-rgb),.55); }
 
   /* ── BRAND ── */
   .wfj-badge { display: inline-flex; align-items: center; gap: 8px; background: #fff; border-radius: 10px; padding: 6px 11px; box-shadow: 0 1px 3px rgba(0,0,0,.3); flex-shrink: 0; }
@@ -694,6 +702,7 @@
           <span id="tableSelInfo"></span>
           <button class="link-btn" id="tableSelAllFiltered"></button>
           <button class="btn-primary" onclick="reportSelected()">Report to CRM</button>
+          <button class="btn-warning" onclick="startPending([...tableSel])">Mark Pending</button>
           <button class="btn-success" onclick="startClose([...tableSel])">Close selected</button>
           <button class="btn-secondary" onclick="clearTableSel()">Clear</button>
         </div>
@@ -756,9 +765,9 @@
 <div class="modal-overlay" id="closeModal" role="dialog" aria-modal="true" style="z-index:120">
   <div class="modal">
     <div class="modal-title" id="closeModalTitle">Close discrepancy</div>
-    <div class="field-hint">These records will be marked Closed and saved to data.json for everyone.</div>
+    <div class="field-hint" id="closeHint">These records will be marked Closed and saved to data.json for everyone.</div>
     <div class="close-list" id="closeList"></div>
-    <div class="field-hint">Resolution note (required)</div>
+    <div class="field-hint" id="closeNoteLabel">Resolution note (required)</div>
     <textarea class="note-input" id="closeNote" placeholder="e.g. Carrier issued credit on Jun-26 invoice; confirmed with Delta rep"></textarea>
     <div class="modal-actions">
       <button class="btn-secondary" onclick="cancelClose()">Cancel</button>
@@ -809,6 +818,15 @@
           <table>
             <thead><tr><th>Employee</th><th>EE ID</th><th>Client</th><th>Carrier</th><th>Plan</th><th>Month</th><th>Discrepancy</th><th>Status</th><th>Added by</th><th>Added on</th><th></th></tr></thead>
             <tbody id="addedBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="section-title" style="font-size:14px;margin-bottom:10px">Moved to Pending</div>
+      <div class="table-card" style="margin-bottom:20px">
+        <div class="table-wrap" style="max-height:260px;">
+          <table>
+            <thead><tr><th>Employee</th><th>EE ID</th><th>Client</th><th>Carrier</th><th>Month</th><th>Discrepancy</th><th>Note</th><th>Changed by</th><th>Changed on</th><th></th></tr></thead>
+            <tbody id="pendingBody"></tbody>
           </table>
         </div>
       </div>
@@ -1184,13 +1202,14 @@ let dataDirty = false;   // a new masterfile was loaded here but not yet saved t
 try { dataDirty = localStorage.getItem('ar_data_dirty') === '1'; } catch(e) {}
 function setDataDirty(v) { dataDirty = v; try { localStorage.setItem('ar_data_dirty', v ? '1' : '0'); } catch(e) {} }
 
-const MANUAL_COLS = ['Manual Change','Status Before Closure','Closure Note','Closed By','Closed On','Manual Entry ID','Added By','Added On'];
+const MANUAL_COLS = ['Manual Change','Status Before Closure','Closure Note','Closed By','Closed On','Status Before Change','Change Note','Changed By','Changed On','Manual Entry ID','Added By','Added On'];
 // Strip manual changes back out, giving the original masterfile records
 function unbake(records) {
   return (records || []).filter(r => !r['Manual Entry ID']).map(r => {
     if (!MANUAL_COLS.some(c => c in r)) return r;
     const o = Object.assign({}, r);
     if (o['Manual Change'] === 'Closed' && o['Status Before Closure']) o['Status'] = o['Status Before Closure'];
+    if (o['Manual Change'] === 'Pending' && o['Status Before Change']) o['Status'] = o['Status Before Change'];
     MANUAL_COLS.forEach(c => delete o[c]);
     return o;
   });
@@ -1201,6 +1220,7 @@ function bake(base) {
     const o = {};
     for (const k in r) if (!k.startsWith('_')) o[k] = r[k];
     if (r._added) Object.assign(o, { 'Manual Entry ID': r._added.id, 'Added By': r._added.by, 'Added On': r._added.at });
+    if (r._pending) Object.assign(o, { 'Manual Change': 'Pending', 'Status Before Change': r._srcStatus, 'Change Note': r._pending.note || '', 'Changed By': r._pending.by, 'Changed On': r._pending.at });
     if (r._manual) Object.assign(o, { 'Manual Change': 'Closed', 'Status Before Closure': r._srcStatus, 'Closure Note': r._manual.note, 'Closed By': r._manual.by, 'Closed On': r._manual.at });
     return o;
   });
@@ -1556,18 +1576,21 @@ function renderAgeGrid() {
     const out=openCnt+pendCnt, total=mRows.length;
     const age=maxAge-idx;
     const intensity=out>0?Math.min(0.9,0.2+(age/Math.max(maxAge,1))*0.7):0.05;
-    const strong=intensity>0.5;
-    const bg=out>0?`rgba(var(--red-rgb),${intensity})`:'var(--surface)';
+    const isDark=document.documentElement.getAttribute('data-theme')==='dark';
+    const strong=intensity>(isDark?0.65:0.4);   // switch to contrasting text on the deeper shades
+    const txt=strong?'var(--age-on)':(isDark&&out>0?'var(--text)':'var(--muted)');
+    const txtSoft=strong?'var(--age-on-soft)':(isDark&&out>0?'rgba(230,237,242,.75)':'var(--muted)');
+    const bg=out>0?`rgba(var(--age-rgb),${intensity})`:'var(--surface)';
     const isActive=chartFilters['Month']===m && !!chartFilters['Outstanding'];
     const oPct=out?Math.round(openCnt/out*100):0;
     return `<div class="age-cell${isActive?' chart-active':''}" role="button" tabindex="0" title="Show ${escHtml(m)} open and pending records"
       onclick="setAgeFilter('${String(m).replace(/'/g,"\\'")}')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}"
-      style="background:${bg};border-color:${isActive?'var(--accent)':out>0?'rgba(var(--red-rgb),0.4)':'var(--border)'}">
-      <div class="age-month" style="color:${strong?'rgba(255,255,255,0.8)':'var(--muted)'}">${escHtml(m)}</div>
-      <div class="age-open" style="color:${out>0?(strong?'#fff':'var(--red)'):'var(--muted)'}">${out}</div>
+      style="background:${bg};border-color:${isActive?'var(--link)':out>0?'rgba(var(--age-rgb),0.45)':'var(--border)'}">
+      <div class="age-month" style="color:${txtSoft}">${escHtml(m)}</div>
+      <div class="age-open" style="color:${out>0?(strong?'var(--age-on)':(isDark?'var(--text)':'var(--accent)')):'var(--muted)'}">${out}</div>
       <div class="age-split" title="${openCnt} open, ${pendCnt} pending"><span style="width:${oPct}%"></span></div>
-      <div class="age-total" style="color:${strong?'rgba(255,255,255,0.85)':'var(--muted)'}">${openCnt} open · ${pendCnt} pending</div>
-      <div class="age-total" style="color:${strong?'rgba(255,255,255,0.65)':'var(--muted)'}">of ${total} total</div>
+      <div class="age-total" style="color:${txt}">${openCnt} open · ${pendCnt} pending</div>
+      <div class="age-total" style="color:${txtSoft}">of ${total} total</div>
     </div>`;
   }).join('');
 }
@@ -1668,8 +1691,10 @@ function applyOverrides(rows) {
     .map(([id, a]) => Object.assign({}, a.record, { _added: { id, by: a.by, at: a.at } }));
   return rows.concat(extra).map(r => {
     const o = OVERRIDES[recordKey(r)];
-    if (!o || o.action !== 'close') return r;
-    return Object.assign({}, r, { Status: 'Closed', _manual: o, _srcStatus: r['Status'] });
+    if (!o) return r;
+    if (o.action === 'close') return Object.assign({}, r, { Status: 'Closed', _manual: o, _srcStatus: r['Status'] });
+    if (o.action === 'pending' && r['Status'] === 'Open') return Object.assign({}, r, { Status: 'Pending', _pending: o, _srcStatus: r['Status'] });
+    return r;
   });
 }
 
@@ -1814,6 +1839,7 @@ function updateUnsyncedBadge() {
 function manualTag(r) {
   let out = '';
   if (r._added) out += `<span class="added-tag" title="${escHtml('Added from the dashboard by ' + r._added.by + ' on ' + new Date(r._added.at).toLocaleDateString())}">added</span>`;
+  if (r._pending) out += `<span class="manual-tag pend" title="${escHtml(`Moved to Pending by ${r._pending.by} on ${new Date(r._pending.at).toLocaleDateString()}` + (r._pending.note ? `\nNote: ${r._pending.note}` : ''))}">manual</span>`;
   if (!r._manual) return out;
   const t = `Closed manually by ${r._manual.by} on ${new Date(r._manual.at).toLocaleDateString()}\nWas: ${r._srcStatus}\nNote: ${r._manual.note}`;
   return out + `<span class="manual-tag" title="${escHtml(t)}">manual</span>`;
@@ -1822,7 +1848,10 @@ function actionCell(r) {
   const k = escHtml(recordKey(r));
   if (r._manual) return `<button class="row-btn reopen-it" data-reopen="${k}">Reopen</button>`;
   if (r['Status'] === 'Closed') return '<span style="color:var(--muted);font-size:12px">—</span>';
-  return `<span class="row-actions"><button class="row-btn report-it" data-report="${k}" title="Draft a CRM message for this record">Report</button><button class="row-btn close-it" data-close="${k}">Close</button></span>`;
+  const mid = r['Status'] === 'Open'
+    ? `<button class="row-btn pend-it" data-pending="${k}" title="Change status from Open to Pending">Pending</button>`
+    : r._pending ? `<button class="row-btn reopen-it" data-unpend="${k}" title="Move back to Open">Open</button>` : '';
+  return `<span class="row-actions"><button class="row-btn report-it" data-report="${k}" title="Draft a CRM message for this record">Report</button>${mid}<button class="row-btn close-it" data-close="${k}">Close</button></span>`;
 }
 
 // ── Table selection (open + pending records) ──
@@ -1860,6 +1889,10 @@ document.getElementById('tableSelAllFiltered').addEventListener('click', () => {
 
 // Delegated clicks for Close / Reopen buttons anywhere in the page
 document.addEventListener('click', e => {
+  const pd = e.target.closest('[data-pending]');
+  if (pd) { startPending([pd.dataset.pending]); return; }
+  const up = e.target.closest('[data-unpend]');
+  if (up) { revertPending(up.dataset.unpend); return; }
   const rp = e.target.closest('[data-report]');
   if (rp) { openCrm([rp.dataset.report]); return; }
   const c = e.target.closest('[data-close]');
@@ -1871,15 +1904,26 @@ document.addEventListener('click', e => {
 });
 
 // ── Close flow ──
-let pendingCloseKeys = [];
+let pendingCloseKeys = [], pendingTarget = 'Closed';
 function findByKey(k) { return allData.find(r => recordKey(r) === k); }
-function startClose(keys) {
+function startClose(keys) { startStatusChange(keys, 'Closed'); }
+function startPending(keys) { startStatusChange(keys, 'Pending'); }
+function startStatusChange(keys, target) {
   if (!isAdminUser()) return;
-  pendingCloseKeys = keys.filter(k => { const r = findByKey(k); return r && r['Status'] !== 'Closed'; });
-  if (!pendingCloseKeys.length) { showToast('⚠ Nothing to close — selected records are already closed', true); return; }
-  const n = pendingCloseKeys.length;
-  document.getElementById('closeModalTitle').textContent = n === 1 ? 'Close 1 discrepancy' : `Close ${n} discrepancies`;
-  document.getElementById('confirmCloseBtn').textContent = n === 1 ? 'Close discrepancy' : `Close ${n} discrepancies`;
+  pendingTarget = target;
+  pendingCloseKeys = keys.filter(k => { const r = findByKey(k); return r && (target === 'Closed' ? r['Status'] !== 'Closed' : r['Status'] === 'Open'); });
+  if (!pendingCloseKeys.length) {
+    showToast(target === 'Closed' ? '⚠ Nothing to close — selected records are already closed' : '⚠ Only Open records can be moved to Pending', true); return;
+  }
+  const n = pendingCloseKeys.length, skipped = keys.length - n;
+  const isClose = target === 'Closed';
+  document.getElementById('closeModalTitle').textContent = isClose ? (n === 1 ? 'Close 1 discrepancy' : `Close ${n} discrepancies`) : (n === 1 ? 'Move 1 discrepancy to Pending' : `Move ${n} discrepancies to Pending`);
+  document.getElementById('confirmCloseBtn').textContent = isClose ? (n === 1 ? 'Close discrepancy' : `Close ${n} discrepancies`) : (n === 1 ? 'Mark as Pending' : `Mark ${n} as Pending`);
+  document.getElementById('confirmCloseBtn').className = isClose ? 'btn-success' : 'btn-warning';
+  document.getElementById('closeHint').textContent = (isClose ? 'These records will be marked Closed and saved to data.json for everyone.' : 'These Open records will be marked Pending and saved to data.json for everyone.')
+    + (skipped ? ` ${skipped} selected record${skipped > 1 ? 's are' : ' is'} skipped because ${isClose ? 'already closed' : 'not Open'}.` : '');
+  document.getElementById('closeNoteLabel').textContent = isClose ? 'Resolution note (required)' : 'Note (optional) — e.g. why it is pending';
+  document.getElementById('closeNote').placeholder = isClose ? 'e.g. Carrier issued credit on Jun-26 invoice; confirmed with Delta rep' : 'e.g. Reported to CRM on Help Scout, waiting on carrier';
   const list = pendingCloseKeys.slice(0, 25).map(k => {
     const r = findByKey(k);
     return `<div><strong>${escHtml(r['Employee Name'])}</strong> (${escHtml(r['Employee ID'])}) · ${escHtml(r['Client'])} · ${escHtml(r['Carrier'])} · ${escHtml(r['Month'])} · ${escHtml(r['Comments'])}</div>`;
@@ -1892,26 +1936,43 @@ function startClose(keys) {
 function cancelClose() { document.getElementById('closeModal').classList.remove('open'); pendingCloseKeys = []; }
 async function confirmClose() {
   const note = document.getElementById('closeNote').value.trim();
-  if (!note) { showToast('⚠ Add a resolution note before closing', true); document.getElementById('closeNote').focus(); return; }
+  const isClose = pendingTarget === 'Closed';
+  if (isClose && !note) { showToast('⚠ Add a resolution note before closing', true); document.getElementById('closeNote').focus(); return; }
   const at = new Date().toISOString(), by = currentUser.displayName;
   pendingCloseKeys.forEach(k => {
-    const r = findByKey(k);
-    OVERRIDES[k] = { action: 'close', status: 'Closed', prevStatus: r ? r['Status'] : '', note, by, at,
+    const r = findByKey(k), prev = OVERRIDES[k];
+    const base = { prevStatus: r ? r['Status'] : '', note, by, at,
       employee: r?.['Employee Name'] || '', employeeId: r?.['Employee ID'] || '', client: r?.['Client'] || '',
       carrier: r?.['Carrier'] || '', planType: r?.['Plan Type'] || '', month: r?.['Month'] || '', comments: r?.['Comments'] || '' };
+    OVERRIDES[k] = isClose
+      ? Object.assign(base, { action: 'close', status: 'Closed', prior: prev && prev.action === 'pending' ? prev : null })   // reopening returns it to Pending
+      : Object.assign(base, { action: 'pending', status: 'Pending' });
   });
   const n = pendingCloseKeys.length;
   detailSelected.clear(); pendingCloseKeys.forEach(k => tableSel.delete(k));
   overridesDirty = true; saveOverridesLocal(true);
-  cancelClose(); refreshAfterOverride();
-  showToast(`✓ ${n} discrepanc${n === 1 ? 'y' : 'ies'} closed${getToken() ? ' — saving to GitHub…' : ''}`);
+  cancelClose(); refreshAfterOverride(); renderClosuresPanel();
+  const what = isClose ? 'closed' : 'moved to Pending';
+  showToast(`✓ ${n} discrepanc${n === 1 ? 'y' : 'ies'} ${what}${getToken() ? ' — saving to GitHub…' : ''}`);
+  pushOverrides(false);
+}
+async function revertPending(k) {
+  if (!isAdminUser()) return;
+  const o = OVERRIDES[k]; if (!o || o.action !== 'pending') return;
+  if (!confirm(`Move ${o.employee || 'this record'} (${o.month}) back to Open?`)) return;
+  OVERRIDES[k] = Object.assign({}, o, { action: 'reopen', at: new Date().toISOString(), by: currentUser.displayName });
+  overridesDirty = true; saveOverridesLocal(true);
+  refreshAfterOverride(); renderClosuresPanel();
+  showToast('✓ Back to Open' + (getToken() ? ' — saving to GitHub…' : ''));
   pushOverrides(false);
 }
 async function reopenRecord(k) {
   if (!isAdminUser()) return;
   const o = OVERRIDES[k]; if (!o) return;
-  if (!confirm(`Reopen ${o.employee || 'this record'} (${o.month})? It will go back to "${o.prevStatus || 'Open'}".`)) return;
-  OVERRIDES[k] = Object.assign({}, o, { action: 'reopen', at: new Date().toISOString(), by: currentUser.displayName });
+  if (!confirm(`Reopen ${o.employee || 'this record'} (${o.month})? It will go back to "${o.prior ? 'Pending' : (o.prevStatus || 'Open')}".`)) return;
+  OVERRIDES[k] = o.prior
+    ? Object.assign({}, o.prior, { at: new Date().toISOString(), by: currentUser.displayName })
+    : Object.assign({}, o, { action: 'reopen', at: new Date().toISOString(), by: currentUser.displayName });
   overridesDirty = true; saveOverridesLocal(true);
   refreshAfterOverride(); renderClosuresPanel();
   showToast('✓ Reopened' + (getToken() ? ' — saving to GitHub…' : ''));
@@ -2086,7 +2147,7 @@ function renderClosuresPanel() {
   else if (overridesDirty || dataDirty) { dot = 'var(--yellow)'; msg = '<strong>Changes waiting to be saved.</strong> Click Save now.'; }
   else { dot = 'var(--green)'; msg = '<strong>Connected. data.json on GitHub is up to date.</strong>' + (lastSyncAt ? ' Last saved ' + lastSyncAt.toLocaleTimeString() + '.' : ''); }
   const addedCount = Object.values(ADDED).filter(a => !a.deleted).length;
-  box.innerHTML = `<span class="sync-dot" style="background:${dot}"></span>${msg}<br><span style="color:var(--muted);font-size:12px">${addedCount} added · ${active.length} closed manually · saved in ${GH_REPO}/data.json</span>`;
+  box.innerHTML = `<span class="sync-dot" style="background:${dot}"></span>${msg}<br><span style="color:var(--muted);font-size:12px">${addedCount} added · ${Object.values(OVERRIDES).filter(o => o.action === 'pending').length} moved to Pending · ${active.length} closed manually · saved in ${GH_REPO}/data.json</span>`;
   const added = Object.entries(ADDED).filter(([, a]) => !a.deleted).sort((a, b) => new Date(b[1].at) - new Date(a[1].at));
   document.getElementById('addedBody').innerHTML = added.length ? added.map(([id, a]) => {
     const r = a.record, live = allData.find(x => x._added && x._added.id === id);
@@ -2096,6 +2157,14 @@ function renderClosuresPanel() {
       <td style="font-size:12px">${escHtml(st)}</td><td style="font-size:12px">${escHtml(a.by)}</td><td style="font-size:12px">${new Date(a.at).toLocaleString()}</td>
       <td><button class="row-btn reopen-it" data-remove-added="${escHtml(id)}">Remove</button></td></tr>`;
   }).join('') : '<tr><td colspan="11" style="padding:22px;text-align:center;color:var(--muted)">No discrepancies added yet. Use Add Discrepancy in the header.</td></tr>';
+  const pend = Object.entries(OVERRIDES).filter(([, o]) => o.action === 'pending').sort((a, b) => new Date(b[1].at) - new Date(a[1].at));
+  document.getElementById('pendingBody').innerHTML = pend.length ? pend.map(([k, o]) => `<tr>
+      <td>${escHtml(o.employee)}</td><td>${escHtml(o.employeeId)}</td><td>${escHtml(o.client)}</td><td>${escHtml(o.carrier)}</td>
+      <td>${escHtml(o.month)}</td><td style="white-space:normal;font-size:12px">${escHtml(o.comments)}</td>
+      <td style="white-space:normal;font-size:12px;min-width:160px">${escHtml(o.note || '—')}</td>
+      <td style="font-size:12px">${escHtml(o.by)}</td><td style="font-size:12px">${new Date(o.at).toLocaleString()}</td>
+      <td><button class="row-btn reopen-it" data-unpend="${escHtml(k)}">Back to Open</button></td></tr>`).join('')
+    : '<tr><td colspan="10" style="padding:22px;text-align:center;color:var(--muted)">No records moved to Pending yet. Use the Pending button on an Open record.</td></tr>';
   const sorted = active.sort((a, b) => new Date(b[1].at) - new Date(a[1].at));
   document.getElementById('closuresBody').innerHTML = sorted.length ? sorted.map(([k, o]) => `<tr>
       <td>${escHtml(o.employee)}</td><td>${escHtml(o.employeeId)}</td><td>${escHtml(o.client)}</td><td>${escHtml(o.carrier)}</td>
@@ -2132,9 +2201,13 @@ function exportClosures() {
     'Status': 'Closed', 'Closure Note': o.note, 'Closed By': o.by, 'Closed On': new Date(o.at).toLocaleString()
   }));
   const addedRows = Object.values(ADDED).filter(a => !a.deleted).map(a => Object.assign({}, a.record, { 'Added By': a.by, 'Added On': new Date(a.at).toLocaleString() }));
-  if (!rows.length && !addedRows.length) { showToast('⚠ No manual changes to export', true); return; }
+  if (!rows.length && !addedRows.length && !Object.values(OVERRIDES).some(o => o.action === 'pending')) { showToast('⚠ No manual changes to export', true); return; }
   const wb = XLSX.utils.book_new();
   if (addedRows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(addedRows), 'Added Discrepancies');
+  const pendRows = Object.values(OVERRIDES).filter(o => o.action === 'pending').map(o => ({
+    'Client': o.client, 'Carrier': o.carrier, 'Employee Name': o.employee, 'Employee ID': o.employeeId, 'Plan Type': o.planType,
+    'Month': o.month, 'Comments': o.comments, 'Previous Status': o.prevStatus, 'Status': 'Pending', 'Note': o.note || '', 'Changed By': o.by, 'Changed On': new Date(o.at).toLocaleString() }));
+  if (pendRows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(pendRows), 'Moved to Pending');
   if (rows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Manual Closures');
   XLSX.writeFile(wb, `AR_Manual_Changes_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
@@ -2612,6 +2685,16 @@ function applyChangesToWorkbook(wb) {
     });
   }
 
+  // moved to Pending in the dashboard -> Status = Pending (only where the file still says Open)
+  let pended = 0;
+  for (const [k, o] of Object.entries(OVERRIDES)) {
+    if (o.action !== 'pending') continue;
+    (byKey.get(k) || []).forEach(row => {
+      const c = row.getCell(col['Status']);
+      if (cellText(c.value).toLowerCase() === 'open') { c.value = 'Pending'; pended++; }
+    });
+  }
+
   // added in the dashboard -> new rows formatted like the last data row
   const tpl = ws.getRow(lastRow);
   const lastCol = Math.max(ws.columnCount, ...Object.values(col));
@@ -2640,7 +2723,7 @@ function applyChangesToWorkbook(wb) {
     row.commit(); added++;
   }
   if (ws.autoFilter && typeof ws.autoFilter === 'string') ws.autoFilter = ws.autoFilter.replace(/\d+$/, String(Math.max(next - 1, lastRow)));
-  return { closed, added, sheet: ws.name };
+  return { closed, pended, added, sheet: ws.name };
 }
 
 function buildWorkbookFromRecords() {
@@ -2671,7 +2754,7 @@ async function downloadSourceData() {
     a.download = `${base.replace(/ - Updated \d{4}-\d{2}-\d{2}$/, '')} - Updated ${new Date().toISOString().slice(0, 10)}.xlsx`;
     a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
     showToast(exact
-      ? `✓ Downloaded — ${stats.closed} row${stats.closed !== 1 ? 's' : ''} set to Closed, ${stats.added} row${stats.added !== 1 ? 's' : ''} added`
+      ? `✓ Downloaded — ${stats.closed} set to Closed, ${stats.pended} set to Pending, ${stats.added} row${stats.added !== 1 ? 's' : ''} added`
       : '✓ Downloaded. Upload the masterfile once with Refresh File so future downloads keep its exact formatting');
   } catch(e) {
     showToast('⚠ Download failed: ' + e.message, true);
