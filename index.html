@@ -1242,12 +1242,10 @@ function applyDataJson(json) {
   setSourceData(unbake(json.records));
 }
 
-function setLastUpdated(suffix = '') {
+function setLastUpdated() {
   const el = document.getElementById('lastUpdated');
-  const f = d => d ? new Date(d).toLocaleString() : '';
-  let t = sourceMeta.uploadedAt ? `Masterfile: ${f(sourceMeta.uploadedAt)}${sourceMeta.uploadedBy ? ' by ' + sourceMeta.uploadedBy : ''}` : 'Masterfile date unknown';
-  if (lastChange.at && lastChange.at !== sourceMeta.uploadedAt) t += ` · Last change: ${f(lastChange.at)}${lastChange.by ? ' by ' + lastChange.by : ''}`;
-  el.textContent = t + (suffix ? ' ' + suffix : '');
+  const at = lastChange.at || sourceMeta.uploadedAt, by = lastChange.at ? lastChange.by : sourceMeta.uploadedBy;
+  el.textContent = at ? `Last change: ${new Date(at).toLocaleString()}${by ? ' by ' + by : ''}` : '';
 }
 
 function downloadDataJson() {
@@ -1699,7 +1697,7 @@ function applyOverrides(rows) {
 }
 
 function saveOverridesLocal(changed = false) {
-  if (changed) { lastChange = { at: new Date().toISOString(), by: currentUser?.displayName || '' }; if (sourceData.length) cacheCurrent(); }
+  if (changed) { lastChange = { at: new Date().toISOString(), by: currentUser?.displayName || '' }; if (sourceData.length) cacheCurrent(); setLastUpdated(); }
   try { localStorage.setItem('ar_overrides_cache', JSON.stringify({ overrides: OVERRIDES, added: ADDED, dirty: overridesDirty })); } catch(e) {}
   updateUnsyncedBadge();
 }
@@ -1740,7 +1738,8 @@ function renderGhPill() {
   else if (ghState === 'saving') { dot = 'var(--link)'; txt = 'Saving to GitHub…'; }
   else if (ghState === 'error' || lastSyncError) { dot = 'var(--red)'; txt = 'GitHub save failed — details'; }
   else if (overridesDirty || dataDirty) { dot = 'var(--yellow)'; txt = 'Unsaved changes'; }
-  else { dot = 'var(--green)'; txt = 'Saved to GitHub' + (lastSyncAt ? ' · ' + lastSyncAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''); }
+  else { el.style.display = 'none'; return; }   // all saved: nothing to show
+  el.style.display = '';
   el.innerHTML = `<span class="sync-dot" style="background:${dot}"></span>${txt}`;
 }
 
